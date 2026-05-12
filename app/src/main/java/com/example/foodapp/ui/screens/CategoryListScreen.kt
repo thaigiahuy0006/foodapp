@@ -10,7 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -22,48 +22,104 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
+import kotlinx.coroutines.launch
+
+// Import Model và Retrofit
+import com.example.foodapp.model.Eatery
+import com.example.foodapp.network.RetrofitClient
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CategoryListScreen(navController: NavController, categoryName: String = "Coffee") {
+fun CategoryListScreen(navController: NavController, categoryId: String = "1", categoryName: String = "Danh sách quán") {
+    val primaryOrange = Color(0xFFFF6D3F)
+    val coroutineScope = rememberCoroutineScope()
+
+    var eateryList by remember { mutableStateOf<List<Eatery>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+
+    // Gọi API lấy danh sách quán theo categoryId
+    LaunchedEffect(categoryId) {
+        coroutineScope.launch {
+            try {
+                eateryList = RetrofitClient.apiService.getEateriesByCategory(categoryId)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(categoryName, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Quay lại")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
             )
         }
     ) { paddingValues ->
-        LazyColumn(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color(0xFFF5F5F5))
                 .padding(paddingValues)
-                .padding(16.dp)
         ) {
-            items(2) { index ->
-                val name = if (index == 0) "Yes Coffee" else "Giangnam Coffee CN Làng..."
-                val address = if (index == 0) "Vành đai sau khu A" else "VQPJ+CR8, Đ. Lương Định Của, Đôn..."
-                val imageUrl = if (index == 0) "https://images.unsplash.com/photo-1509042239860-f550ce710b93?q=80&w=200" else "https://images.unsplash.com/photo-1554118811-1e0d58224f24?q=80&w=200"
-
-                CategoryEateryItem(navController, name, address, imageUrl)
-                Spacer(modifier = Modifier.height(16.dp))
+            if (isLoading) {
+                CircularProgressIndicator(
+                    color = primaryOrange,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            } else if (eateryList.isEmpty()) {
+                Text(
+                    text = "Chưa có quán ăn nào trong danh mục này",
+                    color = Color.Gray,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp)
+                ) {
+                    items(eateryList.size) { index ->
+                        val eatery = eateryList[index]
+                        // Truyền dữ liệu thật vào Item
+                        CategoryEateryItem(
+                            navController = navController,
+                            eateryId = eatery.id.toString(), // Truyền ID của quán để bấm vào xem chi tiết
+                            name = eatery.name,
+                            address = eatery.address ?: "Đang cập nhật địa chỉ",
+                            imageUrl = eatery.image_url,
+                            rating = eatery.rating.toString(),
+                            distance = eatery.distance ?: "1 km"
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-fun CategoryEateryItem(navController: NavController, name: String, address: String, imageUrl: String) {
+fun CategoryEateryItem(
+    navController: NavController,
+    eateryId: String,
+    name: String,
+    address: String,
+    imageUrl: String,
+    rating: String,
+    distance: String
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { navController.navigate("detail") },
+            .clickable { navController.navigate("detail/$eateryId") }, // Chuyển trang kèm ID quán
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -87,10 +143,10 @@ fun CategoryEateryItem(navController: NavController, name: String, address: Stri
                 Text(text = address, color = Color.Gray, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = "3 km", color = Color.Gray, fontSize = 12.sp)
+                    Text(text = distance, color = Color.Gray, fontSize = 12.sp)
                     Spacer(modifier = Modifier.width(16.dp))
-                    Icon(Icons.Default.Star, contentDescription = "Rating", tint = Color(0xFFFFC107), modifier = Modifier.size(14.dp))
-                    Text(text = " 5.0", color = Color.Gray, fontSize = 12.sp)
+                    Icon(Icons.Default.Star, contentDescription = "Đánh giá", tint = Color(0xFFFFC107), modifier = Modifier.size(14.dp))
+                    Text(text = " $rating", color = Color.Gray, fontSize = 12.sp)
                 }
             }
         }

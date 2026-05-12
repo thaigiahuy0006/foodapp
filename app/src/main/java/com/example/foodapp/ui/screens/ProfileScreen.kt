@@ -1,7 +1,15 @@
 package com.example.foodapp.ui.screens
 
+import android.net.Uri
+import android.provider.OpenableColumns
+import android.webkit.MimeTypeMap
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -10,7 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,105 +26,154 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
+import kotlinx.coroutines.launch
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
+import com.example.foodapp.network.RetrofitClient
+import java.io.File
+import java.io.FileOutputStream
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(navController: NavController) {
+    val context = LocalContext.current
     val primaryOrange = Color(0xFFFF6D3F)
+    val coroutineScope = rememberCoroutineScope()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Profile", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
-            )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { navController.popBackStack() },
-                containerColor = primaryOrange,
-                shape = CircleShape
-            ) {
-                Icon(Icons.Default.Check, contentDescription = "Save", tint = Color.White)
+    var firstName by remember { mutableStateOf("") }
+    var lastName by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
+    var gender by remember { mutableStateOf("") }
+    var phone by remember { mutableStateOf("") }
+    var address by remember { mutableStateOf("") }
+    var avatarUrl by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(true) }
+    var isUploadingAvatar by remember { mutableStateOf(false) }
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+        onResult = { uri ->
+            uri?.let { selectedUri ->
+                isUploadingAvatar = true
+                coroutineScope.launch {
+                    try {
+                        val avatarPart = createMultipartBody(selectedUri, context)
+                        if (avatarPart != null) {
+                            val userIdPart = "1".toRequestBody("text/plain".toMediaTypeOrNull())
+                            val response = RetrofitClient.apiService.uploadAvatar(userIdPart, avatarPart)
+                            if (response.success && response.avatar_url != null) {
+                                // Cập nhật URL mới vào biến trạng thái
+                                avatarUrl = response.avatar_url
+                                Toast.makeText(context, "Cập nhật ảnh thành công!", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    } catch (e: Exception) { e.printStackTrace() }
+                    finally { isUploadingAvatar = false }
+                }
             }
         }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.White)
-                .padding(paddingValues)
-                .padding(horizontal = 20.dp)
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Spacer(modifier = Modifier.height(24.dp))
+    )
 
-            // Avatar
-            Box(modifier = Modifier.size(100.dp)) {
-                Image(
-                    painter = rememberAsyncImagePainter("https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150"),
-                    contentDescription = "Avatar",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize().clip(CircleShape)
-                )
+    LaunchedEffect(Unit) {
+        coroutineScope.launch {
+            try {
+                val response = RetrofitClient.apiService.getProfile(1)
+                if (response.success && response.user != null) {
+                    firstName = response.user.first_name ?: ""
+                    lastName = response.user.last_name ?: ""
+                    email = response.user.email
+                    gender = response.user.gender ?: ""
+                    phone = response.user.phone ?: ""
+                    address = response.user.address ?: ""
+                    avatarUrl = response.user.avatar_url ?: ""
+                }
+            } catch (e: Exception) { e.printStackTrace() }
+            finally { isLoading = false }
+        }
+    }
+
+    Scaffold(
+        topBar = { TopAppBar(title = { Text("Hồ sơ cá nhân", fontWeight = FontWeight.Bold) }, navigationIcon = { IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Quay lại") } }) },
+        floatingActionButton = { FloatingActionButton(onClick = { /* Gọi API updateProfile tương tự code cũ của bạn */ }, containerColor = primaryOrange, shape = CircleShape) { Icon(Icons.Default.Check, contentDescription = "Lưu", tint = Color.White) } }
+    ) { padding ->
+        if (isLoading) { /* Hiển thị Loading */ }
+        else {
+            Column(modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 20.dp).verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
+                Spacer(modifier = Modifier.height(24.dp))
+                Box(contentAlignment = Alignment.BottomEnd) {
+                    // FIX: Thêm dấu thời gian phá cache khi hiển thị
+                    val displayUrl = if (avatarUrl.isNotEmpty()) "$avatarUrl?t=${System.currentTimeMillis()}"
+                    else "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150"
+                    Image(
+                        painter = rememberAsyncImagePainter(model = displayUrl),
+                        contentDescription = "Avatar",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(100.dp).clip(CircleShape).background(Color.LightGray)
+                    )
+                    IconButton(onClick = { photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, modifier = Modifier.size(32.dp).background(primaryOrange, CircleShape).padding(4.dp)) { Icon(Icons.Default.Edit, contentDescription = "Đổi ảnh", tint = Color.White, modifier = Modifier.size(16.dp)) }
+                    if (isUploadingAvatar) { CircularProgressIndicator(color = Color.White, modifier = Modifier.size(100.dp).padding(30.dp), strokeWidth = 5.dp) }
+                }
+                // ... (Phần nhập liệu giữ nguyên) ...
+                Spacer(modifier = Modifier.height(32.dp))
+                Text("Thông tin người dùng", color = Color.Gray, fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    OutlinedTextField(value = firstName, onValueChange = { firstName = it }, label = { Text("Tên") }, modifier = Modifier.weight(1f))
+                    OutlinedTextField(value = lastName, onValueChange = { lastName = it }, label = { Text("Họ") }, modifier = Modifier.weight(1f))
+                }
+                OutlinedTextField(value = email, onValueChange = { }, label = { Text("Email") }, modifier = Modifier.fillMaxWidth(), enabled = false)
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    OutlinedTextField(value = gender, onValueChange = { gender = it }, label = { Text("Giới tính") }, modifier = Modifier.weight(1f))
+                    OutlinedTextField(value = phone, onValueChange = { phone = it }, label = { Text("Số điện thoại") }, modifier = Modifier.weight(1.5f))
+                }
+                OutlinedTextField(value = address, onValueChange = { address = it }, label = { Text("Địa chỉ giao hàng mặc định") }, modifier = Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(100.dp))
             }
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // User Information Section
-            Box(modifier = Modifier.fillMaxWidth()) {
-                Text("User Information", color = Color.Gray, fontSize = 16.sp, fontWeight = FontWeight.Medium)
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                OutlinedTextField(value = "Phú", onValueChange = {}, label = { Text("First name") }, modifier = Modifier.weight(1f))
-                OutlinedTextField(value = "Quang", onValueChange = {}, label = { Text("Last name") }, modifier = Modifier.weight(1f))
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            OutlinedTextField(value = "phuquang14722@gmail.com", onValueChange = {}, label = { Text("Email") }, modifier = Modifier.fillMaxWidth())
-            Spacer(modifier = Modifier.height(16.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                OutlinedTextField(value = "male", onValueChange = {}, label = { Text("Gender") }, modifier = Modifier.weight(1f))
-                OutlinedTextField(value = "0354351...", onValueChange = {}, label = { Text("Phone number") }, modifier = Modifier.weight(1.5f))
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // Address Section
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Address", color = Color.Gray, fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                Text("ADD MORE", color = primaryOrange, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            Divider(color = Color.LightGray.copy(alpha = 0.5f))
-
-            // Address Items
-            AddressItem("A\n23\nEa M'nang, Cư M'gar District, Dak Lak, Vietn")
-            Divider(color = Color.LightGray.copy(alpha = 0.5f))
-            AddressItem("QUANG\n12323\n1600 Plymouth St, Mountain View, CA")
-
-            Spacer(modifier = Modifier.height(80.dp)) // Chừa chỗ cho Floating Button
         }
     }
 }
 
-@Composable
-fun AddressItem(addressText: String) {
-    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Default.LocationOn, contentDescription = "Location", tint = Color(0xFFFF6D3F))
-        Spacer(modifier = Modifier.width(16.dp))
-        Text(text = addressText, color = Color.Gray, fontSize = 14.sp)
+// --- HÀM HELPER CHUYỂN URI ANDROID THÀNH FILE GỬI LÊN SERVER ---
+// Hàm này cực kỳ quan trọng vì Android scoped storage ko cho phép lấy đường dẫn file trực tiếp từ URI.
+private fun createMultipartBody(uri: Uri, context: android.content.Context): MultipartBody.Part? {
+    try {
+        val contentResolver = context.contentResolver
+        // 1. Lấy tên file gốc từ URI
+        var fileName = "temp_avatar"
+        contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (nameIndex != -1) fileName = cursor.getString(nameIndex)
+            }
+        }
+
+        // 2. Lấy định dạng file
+        val extension = MimeTypeMap.getSingleton().getExtensionFromMimeType(contentResolver.getType(uri))
+
+        // 3. Tạo một file tạm trong bộ nhớ cache của app
+        val tempFile = File(context.cacheDir, fileName)
+
+        // 4. Copy dữ liệu từ URI vào file tạm đó
+        contentResolver.openInputStream(uri)?.use { inputStream ->
+            FileOutputStream(tempFile).use { outputStream ->
+                inputStream.copyTo(outputStream)
+            }
+        } ?: return null
+
+        // 5. Chuyển file tạm thành RequestBody và Part để Retrofit gửi đi
+        val mediaType = contentResolver.getType(uri)?.toMediaTypeOrNull()
+        val requestBody = tempFile.asRequestBody(mediaType)
+        return MultipartBody.Part.createFormData("avatar", tempFile.name, requestBody)
+    } catch (e: Exception) {
+        e.printStackTrace()
+        return null
     }
 }

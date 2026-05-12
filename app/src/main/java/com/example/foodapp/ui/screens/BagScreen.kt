@@ -2,6 +2,7 @@ package com.example.foodapp.ui.screens
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -21,7 +22,6 @@ import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
 import kotlinx.coroutines.launch
 
-// Import Model và Retrofit
 import com.example.foodapp.model.CartItem
 import com.example.foodapp.network.RetrofitClient
 
@@ -31,34 +31,33 @@ fun BagScreen(navController: NavController) {
     val primaryOrange = Color(0xFFFF6D3F)
     val coroutineScope = rememberCoroutineScope()
 
-    // Khai báo biến lưu dữ liệu giỏ hàng từ MySQL
     var cartItems by remember { mutableStateOf<List<CartItem>>(emptyList()) }
     var subtotal by remember { mutableStateOf(0.0) }
-    val deliveryFee = 15000.0 // Phí ship cố định
-    val total = subtotal + if(cartItems.isNotEmpty()) deliveryFee else 0.0
+    val deliveryFee = 15000.0
+    val total = subtotal + if (cartItems.isNotEmpty()) deliveryFee else 0.0
 
-    // Tự động lấy dữ liệu khi mở màn hình
-    LaunchedEffect(Unit) {
+    // Hàm lấy lại dữ liệu giỏ hàng
+    fun fetchCart() {
         coroutineScope.launch {
             try {
-                val response = RetrofitClient.apiService.getCart(userId = 1) // Lấy giỏ hàng của user ID = 1
+                val response = RetrofitClient.apiService.getCart(userId = 1)
                 if (response.success) {
                     cartItems = response.cart_items ?: emptyList()
                     subtotal = response.subtotal ?: 0.0
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            } catch (e: Exception) { e.printStackTrace() }
         }
     }
+
+    LaunchedEffect(Unit) { fetchCart() }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("My Bag", fontWeight = FontWeight.Bold) },
+                title = { Text("Giỏ hàng của tôi", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Quay lại")
                     }
                 }
             )
@@ -71,79 +70,85 @@ fun BagScreen(navController: NavController) {
                 .padding(16.dp)
         ) {
             LazyColumn(modifier = Modifier.weight(1f)) {
-                // Đổ dữ liệu thật từ biến cartItems
                 items(cartItems.size) { index ->
                     val item = cartItems[index]
-                    CartItemRow(item, primaryOrange)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Image(
+                            painter = rememberAsyncImagePainter(item.image_url),
+                            contentDescription = item.name,
+                            modifier = Modifier.size(80.dp).clip(RoundedCornerShape(8.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(text = item.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            Text(text = "${item.price} VNĐ", color = Color.Gray, fontSize = 14.sp)
+                        }
+                        // Nút Tăng/Giảm số lượng
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "-",
+                                modifier = Modifier.padding(8.dp).clickable {
+                                    if (item.quantity > 1) {
+                                        coroutineScope.launch {
+                                            RetrofitClient.apiService.addToCart(mapOf("user_id" to "1", "product_id" to item.product_id.toString(), "quantity" to "-1"))
+                                            fetchCart() // Cập nhật lại list sau khi trừ
+                                        }
+                                    }
+                                },
+                                fontWeight = FontWeight.Bold, fontSize = 20.sp
+                            )
+                            Text("${item.quantity}", fontSize = 16.sp)
+                            Text(
+                                "+",
+                                modifier = Modifier.padding(8.dp).clickable {
+                                    coroutineScope.launch {
+                                        RetrofitClient.apiService.addToCart(mapOf("user_id" to "1", "product_id" to item.product_id.toString(), "quantity" to "1"))
+                                        fetchCart() // Cập nhật lại list sau khi cộng
+                                    }
+                                },
+                                fontWeight = FontWeight.Bold, color = primaryOrange, fontSize = 20.sp
+                            )
+                        }
+                    }
                     Spacer(modifier = Modifier.height(16.dp))
                 }
 
                 if (cartItems.isEmpty()) {
-                    item {
-                        Text("Giỏ hàng đang trống!", color = Color.Gray, modifier = Modifier.padding(top = 20.dp))
-                    }
+                    item { Text("Giỏ hàng đang trống!", color = Color.Gray, modifier = Modifier.padding(top = 20.dp)) }
                 }
             }
 
-            // Tổng kết thanh toán
-            Divider()
+            // Tổng kết
+            HorizontalDivider()
             Spacer(modifier = Modifier.height(16.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Subtotal", color = Color.Gray)
-                Text("${subtotal} VND", fontWeight = FontWeight.Bold)
+                Text("Tạm tính", color = Color.Gray)
+                Text("$subtotal VNĐ", fontWeight = FontWeight.Bold)
             }
             Spacer(modifier = Modifier.height(8.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Delivery Fee", color = Color.Gray)
-                Text("${if(cartItems.isNotEmpty()) deliveryFee else 0.0} VND", fontWeight = FontWeight.Bold)
+                Text("Phí giao hàng", color = Color.Gray)
+                Text("${if(cartItems.isNotEmpty()) deliveryFee else 0.0} VNĐ", fontWeight = FontWeight.Bold)
             }
             Spacer(modifier = Modifier.height(16.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Total", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Text("${total} VND", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = primaryOrange)
+                Text("Tổng cộng", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text("$total VNĐ", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = primaryOrange)
             }
-
             Spacer(modifier = Modifier.height(24.dp))
-
             Button(
-                onClick = {
-                    if(cartItems.isNotEmpty()) navController.navigate("checkout")
-                },
+                onClick = { if(cartItems.isNotEmpty()) navController.navigate("checkout") },
                 modifier = Modifier.fillMaxWidth().height(50.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if(cartItems.isNotEmpty()) primaryOrange else Color.LightGray
-                ),
+                colors = ButtonDefaults.buttonColors(containerColor = if(cartItems.isNotEmpty()) primaryOrange else Color.LightGray),
                 shape = RoundedCornerShape(8.dp),
                 enabled = cartItems.isNotEmpty()
             ) {
-                Text("CHECKOUT", fontWeight = FontWeight.Bold, color = Color.White)
+                Text("THANH TOÁN", fontWeight = FontWeight.Bold, color = Color.White)
             }
-        }
-    }
-}
-
-// Cập nhật lại Item truyền vào class CartItem
-@Composable
-fun CartItemRow(item: CartItem, primaryOrange: Color) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Image(
-            painter = rememberAsyncImagePainter(item.image_url),
-            contentDescription = item.name,
-            modifier = Modifier.size(80.dp).clip(RoundedCornerShape(8.dp)),
-            contentScale = ContentScale.Crop
-        )
-        Spacer(modifier = Modifier.width(16.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = item.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            Text(text = "${item.quantity} x ${item.price} VND", color = Color.Gray, fontSize = 14.sp)
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("-", modifier = Modifier.padding(8.dp), fontWeight = FontWeight.Bold)
-            Text("${item.quantity}")
-            Text("+", modifier = Modifier.padding(8.dp), fontWeight = FontWeight.Bold, color = primaryOrange)
         }
     }
 }

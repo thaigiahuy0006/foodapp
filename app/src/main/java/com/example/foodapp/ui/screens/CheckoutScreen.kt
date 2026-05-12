@@ -20,7 +20,8 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
 import kotlinx.coroutines.launch
-import com.example.foodapp.network.RetrofitClient // Đảm bảo đã import đúng RetrofitClient
+import com.example.foodapp.network.RetrofitClient
+import com.example.foodapp.model.CartItem
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -29,19 +30,35 @@ fun CheckoutScreen(navController: NavController) {
     val coroutineScope = rememberCoroutineScope()
     var showMessage by remember { mutableStateOf("") }
 
-    // Dữ liệu thanh toán (Bạn có thể truyền các giá trị này qua ViewModel hoặc NavArgs)
-    val userId = "1"
-    val totalPrice = "145000.0"
-    val address = "VRJ6+8HH, Đông Hoà, Dĩ An, Bình Dương, Việt Nam"
-    val phone = "035431..."
+    // State cho việc nhập liệu địa chỉ và SĐT
+    var address by remember { mutableStateOf("Ký túc xá VKU, Đà Nẵng") }
+    var phone by remember { mutableStateOf("0901234567") }
+
+    // State cho giỏ hàng lấy từ DB
+    var cartItems by remember { mutableStateOf<List<CartItem>>(emptyList()) }
+    var subtotal by remember { mutableStateOf(0.0) }
+    val deliveryFee = 15000.0
+    val total = subtotal + if(cartItems.isNotEmpty()) deliveryFee else 0.0
+
+    LaunchedEffect(Unit) {
+        coroutineScope.launch {
+            try {
+                val response = RetrofitClient.apiService.getCart(userId = 1)
+                if (response.success) {
+                    cartItems = response.cart_items ?: emptyList()
+                    subtotal = response.subtotal ?: 0.0
+                }
+            } catch (e: Exception) { e.printStackTrace() }
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Order Information", fontWeight = FontWeight.Bold) },
+                title = { Text("Thông tin đặt hàng", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Quay lại")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
@@ -49,117 +66,81 @@ fun CheckoutScreen(navController: NavController) {
         }
     ) { paddingValues ->
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.White)
-                .padding(paddingValues)
-                .padding(16.dp)
+            modifier = Modifier.fillMaxSize().background(Color.White).padding(paddingValues).padding(16.dp)
         ) {
-            // Phần hiển thị địa chỉ giao hàng
             item {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Deliver to", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.DarkGray)
-                    Text("Change", color = primaryOrange, fontWeight = FontWeight.Medium)
-                }
+                Text("Giao đến", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.DarkGray)
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(address, color = Color.Gray, fontSize = 14.sp)
+                OutlinedTextField(
+                    value = address,
+                    onValueChange = { address = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp)
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text("Số điện thoại liên hệ", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.DarkGray)
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = phone,
+                    onValueChange = { phone = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp)
+                )
                 Spacer(modifier = Modifier.height(16.dp))
                 HorizontalDivider(color = Color.LightGray.copy(alpha = 0.5f))
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // Phần hiển thị thông tin liên hệ
             item {
-                Text("Contact", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.DarkGray)
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("Phú Quang, $phone", color = Color.Gray, fontSize = 14.sp)
-                Spacer(modifier = Modifier.height(16.dp))
-                HorizontalDivider(color = Color.LightGray.copy(alpha = 0.5f))
+                Text("Tóm tắt đơn hàng", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.DarkGray)
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // Tiêu đề tóm tắt đơn hàng
-            item {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Order summary", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.DarkGray)
-                    Text("Add more", color = primaryOrange, fontWeight = FontWeight.Medium)
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-
-            // Danh sách các món ăn trong đơn (Giả lập để hiển thị UI)
-            items(2) { index ->
-                val name = if (index == 0) "Nước mía" else "Cơm gà xối mỡ"
-                val price = if (index == 0) "20000.0 VND" else "30000.0 VND"
-                val image = if (index == 0) "https://images.unsplash.com/photo-1556679343-c7306c1976bc?q=80&w=200" else "https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?q=80&w=200"
-
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+            items(cartItems.size) { index ->
+                val item = cartItems[index]
+                Row(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Image(
-                        painter = rememberAsyncImagePainter(image),
-                        contentDescription = name,
+                        painter = rememberAsyncImagePainter(item.image_url),
+                        contentDescription = item.name,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.size(60.dp).clip(RoundedCornerShape(8.dp))
                     )
                     Spacer(modifier = Modifier.width(16.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(text = name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        Text(text = "x 2", color = Color.Gray, fontSize = 14.sp)
+                        Text(text = item.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Text(text = "Số lượng: ${item.quantity}", color = Color.Gray, fontSize = 14.sp)
                     }
-                    Text(text = price, color = primaryOrange, fontWeight = FontWeight.Bold)
+                    Text(text = "${item.price * item.quantity} VNĐ", color = primaryOrange, fontWeight = FontWeight.Bold)
                 }
             }
 
-            // Tổng tiền và nút đặt hàng
             item {
                 HorizontalDivider(color = Color.LightGray.copy(alpha = 0.5f))
                 Spacer(modifier = Modifier.height(16.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("Total", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    Text("$totalPrice VND", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = primaryOrange)
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Tổng thanh toán", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text("$total VNĐ", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = primaryOrange)
                 }
 
-                if (showMessage.isNotEmpty()) {
-                    Text(text = showMessage, color = Color.Red, modifier = Modifier.padding(vertical = 8.dp))
-                }
-
+                if (showMessage.isNotEmpty()) { Text(text = showMessage, color = Color.Red, modifier = Modifier.padding(vertical = 8.dp)) }
                 Spacer(modifier = Modifier.height(32.dp))
 
                 Button(
                     onClick = {
                         coroutineScope.launch {
                             try {
-                                val requestData = mapOf(
-                                    "user_id" to userId,
-                                    "total_price" to totalPrice,
-                                    "address" to address,
-                                    "phone" to phone
-                                )
-                                // Gọi API đặt hàng
+                                val requestData = mapOf("user_id" to "1", "total_price" to total.toString(), "address" to address, "phone" to phone)
                                 val response = RetrofitClient.apiService.placeOrder(requestData)
-
-                                if (response.success) {
-                                    // Đặt hàng thành công, chuyển đến danh sách đơn hàng
-                                    navController.navigate("orders") {
-                                        popUpTo("home") // Xóa các trang trung gian khỏi stack
-                                    }
-                                } else {
-                                    showMessage = response.message ?: "Đặt hàng thất bại"
-                                }
-                            } catch (e: Exception) {
-                                showMessage = "Lỗi kết nối mạng!"
-                            }
+                                if (response.success) navController.navigate("orders") { popUpTo("home") }
+                                else showMessage = "Đặt hàng thất bại"
+                            } catch (e: Exception) { showMessage = "Lỗi kết nối mạng!" }
                         }
                     },
                     modifier = Modifier.fillMaxWidth().height(50.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = primaryOrange),
                     shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text("PLACE ORDER", fontWeight = FontWeight.Bold, color = Color.White)
-                }
-                Spacer(modifier = Modifier.height(16.dp))
+                ) { Text("ĐẶT HÀNG NGAY", fontWeight = FontWeight.Bold, color = Color.White) }
             }
         }
     }

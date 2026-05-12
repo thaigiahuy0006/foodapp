@@ -9,11 +9,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -22,129 +21,132 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.navigation.NavController // Đã thêm Import
+import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
+import kotlinx.coroutines.launch
+
+import com.example.foodapp.model.Product
+import com.example.foodapp.model.Eatery
+import com.example.foodapp.network.RetrofitClient
 
 @Composable
-fun EateryDetailScreen(navController: NavController) {
+fun EateryDetailScreen(navController: NavController, eateryId: String = "1") {
     val primaryOrange = Color(0xFFFF6D3F)
+    val coroutineScope = rememberCoroutineScope()
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().background(Color(0xFFF5F5F5))
-    ) {
-        item {
-            Box(modifier = Modifier.fillMaxWidth().height(250.dp)) {
+    // Khai báo các biến lưu trữ dữ liệu tải về
+    var eatery by remember { mutableStateOf<Eatery?>(null) }
+    var productList by remember { mutableStateOf<List<Product>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+
+    // Gọi API lấy dữ liệu dựa theo eateryId
+    LaunchedEffect(eateryId) {
+        coroutineScope.launch {
+            try {
+                val response = RetrofitClient.apiService.getEateryDetails(eateryId)
+                if (response.success) {
+                    eatery = response.eatery
+                    productList = response.products ?: emptyList()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    // Hiển thị vòng xoay đang tải
+    if (isLoading) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = primaryOrange)
+        }
+        return
+    }
+
+    Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF12151C)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.White, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+        ) {
+            // ---- ẢNH BÌA & NÚT BACK ----
+            Box(modifier = Modifier.fillMaxWidth().height(200.dp)) {
                 Image(
-                    painter = rememberAsyncImagePainter("https://images.unsplash.com/photo-1544025162-848f657a80fa?q=80&w=800"),
-                    contentDescription = "Cover",
+                    painter = rememberAsyncImagePainter(eatery?.image_url ?: ""),
+                    contentDescription = eatery?.name,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                        .padding(top = 24.dp), // Thêm khoảng cách cho thanh status bar
-                    horizontalArrangement = Arrangement.SpaceBetween
+                IconButton(
+                    onClick = { navController.popBackStack() },
+                    modifier = Modifier.padding(16.dp).padding(top = 24.dp).background(Color.Black.copy(alpha = 0.4f), CircleShape)
                 ) {
-                    // Nút Back
-                    IconButton(
-                        onClick = { navController.popBackStack() }, // Quay lại
-                        modifier = Modifier.background(Color.Black.copy(alpha = 0.4f), CircleShape)
-                    ) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
-                    }
-                    IconButton(
-                        onClick = { },
-                        modifier = Modifier.background(Color.White, CircleShape)
-                    ) {
-                        Icon(Icons.Default.Favorite, contentDescription = "Favorite", tint = primaryOrange)
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Quay lại", tint = Color.White)
+                }
+            }
+
+            // ---- THÔNG TIN QUÁN & MENU ----
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(text = eatery?.name ?: "Đang tải...", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    // Nút Info chuyển sang màn thông tin chi tiết
+                    Icon(
+                        Icons.Default.Info,
+                        contentDescription = "Thông tin",
+                        tint = primaryOrange,
+                        modifier = Modifier.size(28.dp).clickable { navController.navigate("eatery_info") }
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Star, contentDescription = "Đánh giá", tint = Color(0xFFFFC107), modifier = Modifier.size(16.dp))
+                    Text(text = " ${eatery?.rating ?: 0.0}", fontSize = 14.sp, color = Color.Gray)
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text(text = eatery?.distance ?: "", fontSize = 14.sp, color = Color.Gray)
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+                Text(text = "Thực đơn", fontSize = 18.sp, fontWeight = FontWeight.Bold) // ĐÃ VIỆT HÓA
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // ---- HIỂN THỊ DANH SÁCH MÓN ĂN TỪ MYSQL ----
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    items(productList.size) { index ->
+                        val product = productList[index]
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 12.dp)
+                                .clickable {
+                                    // QUAN TRỌNG: Truyền ID món ăn sang màn hình Chi tiết món!
+                                    navController.navigate("product_detail/${product.id}")
+                                },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Image(
+                                painter = rememberAsyncImagePainter(product.image_url),
+                                contentDescription = product.name,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.size(80.dp).clip(RoundedCornerShape(8.dp))
+                            )
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(text = product.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(text = product.description ?: "", color = Color.Gray, fontSize = 12.sp)
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(text = "${product.price} VNĐ", color = primaryOrange, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        HorizontalDivider(color = Color.LightGray.copy(alpha = 0.3f))
                     }
                 }
             }
-        }
-
-        item {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .offset(y = (-24).dp)
-                    .padding(horizontal = 16.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(text = "Cơm Ngô Quyền", fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                        Icon(Icons.Default.Info, contentDescription = "Info", tint = Color.Gray)
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("1.48 km", color = Color.Gray, fontSize = 14.sp)
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Icon(Icons.Default.Star, contentDescription = "Rating", tint = Color(0xFFFFC107), modifier = Modifier.size(16.dp))
-                        Text(" 4.0", color = Color.Gray, fontSize = 14.sp)
-                    }
-                }
-            }
-        }
-
-        item {
-            Text(
-                text = "Product",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.Gray,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-            )
-        }
-
-        items(2) { index ->
-            ProductItemRow(
-                name = if (index == 0) "Nước mía" else "Nước dừa",
-                desc = if (index == 0) "Mía" else "Dừa trái",
-                price = "10000.0 VND",
-                primaryOrange = primaryOrange,
-                navController = navController // TRUYỀN THÊM BIẾN NÀY VÀO
-            )
-        }
-    }
-}
-
-@Composable
-fun ProductItemRow(
-    name: String,
-    desc: String,
-    price: String,
-    primaryOrange: Color,
-    navController: NavController // THÊM THAM SỐ NÀY
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .background(Color.White, RoundedCornerShape(12.dp))
-            .clickable { navController.navigate("product_detail") } // BẤM VÀO ĐÂY ĐỂ CHUYỂN TRANG
-            .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Image(
-            painter = rememberAsyncImagePainter("https://images.unsplash.com/photo-1546173159-315724a31696?q=80&w=200"),
-            contentDescription = name,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.size(70.dp).clip(RoundedCornerShape(8.dp))
-        )
-        Spacer(modifier = Modifier.width(16.dp))
-        Column {
-            Text(text = name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            Text(text = desc, color = Color.Gray, fontSize = 12.sp)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(text = price, color = primaryOrange, fontWeight = FontWeight.Bold)
         }
     }
 }
