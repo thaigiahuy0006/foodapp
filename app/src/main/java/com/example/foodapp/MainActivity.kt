@@ -1,6 +1,5 @@
 package com.example.foodapp
 
-
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -17,7 +16,7 @@ import com.example.foodapp.ui.theme.FoodappTheme
 import androidx.navigation.NavType
 import androidx.navigation.navArgument
 
-// Import TOÀN BỘ 10+ màn hình chúng ta đã code
+// Import toàn bộ màn hình
 import com.example.foodapp.ui.screens.*
 
 class MainActivity : ComponentActivity() {
@@ -41,7 +40,6 @@ class MainActivity : ComponentActivity() {
 fun FoodAppNavigation() {
     val navController = rememberNavController()
 
-    // Bắt đầu ứng dụng tại màn hình Đăng nhập
     NavHost(navController = navController, startDestination = "login") {
 
         // 1. Cụm Đăng nhập / Đăng ký
@@ -55,21 +53,6 @@ fun FoodAppNavigation() {
 
         // 3. Cụm Phân loại & Danh sách quán ăn
         composable("popular_list") { PopularListScreen(navController) }
-
-        // 4. Cụm Chi tiết Quán & Món ăn
-        composable("eatery_info") { EateryInfoScreen(navController) }
-
-        // 5. Cụm Thanh điều hướng dưới cùng (Bottom Nav)
-        composable("saved") { SavedScreen(navController) }
-        composable("orders") { OrderScreen(navController) }
-        composable("bag") { BagScreen(navController) }
-
-        composable("settings") { SettingsScreen(navController) }
-        composable("profile") { ProfileScreen(navController) }
-        composable("about_us") { AboutUsScreen(navController) }
-
-        composable("checkout") { CheckoutScreen(navController) }
-        composable("order_detail") { OrderDetailScreen(navController) }
         composable(
             route = "category_list/{categoryId}",
             arguments = listOf(navArgument("categoryId") { type = NavType.StringType })
@@ -77,7 +60,6 @@ fun FoodAppNavigation() {
             val categoryId = backStackEntry.arguments?.getString("categoryId") ?: "1"
             CategoryListScreen(navController, categoryId)
         }
-        composable("popular_list") { PopularListScreen(navController) }
 
         // 4. Cụm Chi tiết Quán & Món ăn (Truyền ID)
         composable(
@@ -87,9 +69,7 @@ fun FoodAppNavigation() {
             val eateryId = backStackEntry.arguments?.getString("eateryId") ?: "1"
             EateryDetailScreen(navController, eateryId)
         }
-
         composable("eatery_info") { EateryInfoScreen(navController) }
-
         composable(
             route = "product_detail/{productId}",
             arguments = listOf(navArgument("productId") { type = NavType.StringType })
@@ -97,5 +77,17 @@ fun FoodAppNavigation() {
             val productId = backStackEntry.arguments?.getString("productId") ?: "1"
             ProductDetailScreen(navController, productId)
         }
+
+        // 5. Cụm Bottom Nav & Cá nhân
+        composable("saved") { SavedScreen(navController) }
+        composable("orders") { OrderScreen(navController) }
+        composable("bag") { BagScreen(navController) }
+        composable("settings") { SettingsScreen(navController) }
+        composable("profile") { ProfileScreen(navController) }
+        composable("about_us") { AboutUsScreen(navController) }
+
+        // 6. Cụm Thanh toán & Đơn hàng
+        composable("checkout") { CheckoutScreen(navController) }
+        composable("order_detail") { OrderDetailScreen(navController) }
     }
 }
