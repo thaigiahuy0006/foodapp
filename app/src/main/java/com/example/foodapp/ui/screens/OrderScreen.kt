@@ -21,6 +21,7 @@ import kotlinx.coroutines.launch
 
 // Import Model và API
 import com.example.foodapp.model.Order
+import com.example.foodapp.model.UserSession
 import com.example.foodapp.network.RetrofitClient
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -45,12 +46,17 @@ fun OrderScreen(navController: NavController) {
         coroutineScope.launch {
             isLoading = true
             try {
-                // Tạm fix user_id = 1 để test. Trạng thái lấy từ statusMap
                 val currentStatus = statusMap[selectedTabIndex]
-                orderList = RetrofitClient.apiService.getOrders(userId = 1, status = currentStatus)
+                // ĐÃ SỬA: Lấy ID động từ UserSession
+                val response = RetrofitClient.apiService.getOrders(userId = UserSession.userId, status = currentStatus)
+                if (response.success) {
+                    orderList = response.orders ?: emptyList()
+                } else {
+                    orderList = emptyList()
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
-                orderList = emptyList() // Lỗi mạng thì hiện rỗng
+                orderList = emptyList()
             } finally {
                 isLoading = false
             }
@@ -60,7 +66,7 @@ fun OrderScreen(navController: NavController) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("My Orders", fontWeight = FontWeight.Bold) },
+                title = { Text("Lịch sử mua hàng", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -135,9 +141,8 @@ fun OrderScreen(navController: NavController) {
 
 @Composable
 fun OrderItemUI(navController: NavController, order: Order, primaryOrange: Color) {
-    // Đổi màu chữ theo trạng thái
     val statusColor = when (order.status) {
-        "Completed" -> Color(0xFF4CAF50) // Xanh lá
+        "Completed" -> Color(0xFF4CAF50)
         "Cancelled" -> Color.Red
         else -> primaryOrange
     }
@@ -145,10 +150,7 @@ fun OrderItemUI(navController: NavController, order: Order, primaryOrange: Color
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable {
-                // Có thể truyền ID đơn hàng qua route để màn OrderDetail fetch chi tiết
-                navController.navigate("order_detail")
-            },
+            .clickable { navController.navigate("order_detail/${order.id}") },
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -167,10 +169,14 @@ fun OrderItemUI(navController: NavController, order: Order, primaryOrange: Color
             HorizontalDivider(color = Color.LightGray.copy(alpha = 0.5f))
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Tạm thời hiển thị địa chỉ giao hàng ở đây thay vì liệt kê món
-            // (Muốn hiện món cần join bảng order_details)
-            Text(text = "Giao đến: ${order.address}", color = Color.DarkGray, fontSize = 14.sp, maxLines = 1)
-            Text(text = "SĐT: ${order.phone}", color = Color.DarkGray, fontSize = 14.sp)
+            Text(text = "Giao đến: ${order.address ?: "Không có địa chỉ"}", color = Color.DarkGray, fontSize = 14.sp, maxLines = 1)
+            Text(text = "SĐT: ${order.phone ?: "Không có SĐT"}", color = Color.DarkGray, fontSize = 14.sp)
+            Text(
+                text = "Thanh toán: ${order.payment_method ?: "Tiền mặt (COD)"}",
+                color = primaryOrange, // Đổi màu xíu cho nổi bật
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium
+            )
 
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -179,7 +185,8 @@ fun OrderItemUI(navController: NavController, order: Order, primaryOrange: Color
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = order.created_at, color = Color.Gray, fontSize = 12.sp)
+                // Đảm bảo có cột created_at trong Model Order của bạn
+                Text(text = order.created_at ?: "", color = Color.Gray, fontSize = 12.sp)
                 Text(text = "${order.total_price} VND", fontWeight = FontWeight.Bold, fontSize = 16.sp)
             }
         }

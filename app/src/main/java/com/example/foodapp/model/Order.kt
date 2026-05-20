@@ -7,5 +7,6 @@ data class Order(
     val status: String,
     val address: String,
     val phone: String,
-    val created_at: String
+    val created_at: String,
+    val payment_method: String?
 )

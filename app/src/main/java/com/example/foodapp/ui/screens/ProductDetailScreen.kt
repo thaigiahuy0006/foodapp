@@ -125,7 +125,7 @@ fun ProductDetailScreen(navController: NavController, productId: String = "1") {
                             coroutineScope.launch {
                                 try {
                                     // ĐÃ FIX: Truyền đúng productId vào CSDL
-                                    val requestData = mapOf("user_id" to "1", "product_id" to product!!.id.toString(), "quantity" to quantity.toString())
+                                    val requestData = mapOf("user_id" to com.example.foodapp.model.UserSession.userId.toString(), "product_id" to product!!.id.toString(), "quantity" to quantity.toString())
                                     val response = RetrofitClient.apiService.addToCart(requestData)
                                     showMessage = "Thêm thành công!"
                                     delay(1000)

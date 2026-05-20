@@ -89,5 +89,11 @@ fun FoodAppNavigation() {
         // 6. Cụm Thanh toán & Đơn hàng
         composable("checkout") { CheckoutScreen(navController) }
         composable("order_detail") { OrderDetailScreen(navController) }
+        // 7. Phân hệ Admin / Nhà hàng
+        composable("admin_dashboard") { AdminDashboardScreen(navController) }
+        // THÊM DÒNG NÀY VÀO TRONG NAVHOST CỦA BẠN:
+        composable("order_history") {
+            com.example.foodapp.ui.screens.OrderScreen(navController)
+        }
     }
 }

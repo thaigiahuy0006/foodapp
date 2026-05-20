@@ -44,7 +44,7 @@ fun HomeScreen(navController: NavController) {
             try {
                 categoryList = RetrofitClient.apiService.getCategories()
                 eateryList = RetrofitClient.apiService.getPopularEateries()
-                val profileResponse = RetrofitClient.apiService.getProfile(1)
+                val profileResponse = RetrofitClient.apiService.getProfile(com.example.foodapp.model.UserSession.userId)
                 if (profileResponse.success) {
                     userProfile = profileResponse.user
                 }

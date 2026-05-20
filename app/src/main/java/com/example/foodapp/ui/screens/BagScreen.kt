@@ -1,5 +1,6 @@
 package com.example.foodapp.ui.screens
 
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -8,6 +9,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -15,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -23,11 +26,13 @@ import coil.compose.rememberAsyncImagePainter
 import kotlinx.coroutines.launch
 
 import com.example.foodapp.model.CartItem
+import com.example.foodapp.model.UserSession
 import com.example.foodapp.network.RetrofitClient
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BagScreen(navController: NavController) {
+    val context = LocalContext.current
     val primaryOrange = Color(0xFFFF6D3F)
     val coroutineScope = rememberCoroutineScope()
 
@@ -36,11 +41,11 @@ fun BagScreen(navController: NavController) {
     val deliveryFee = 15000.0
     val total = subtotal + if (cartItems.isNotEmpty()) deliveryFee else 0.0
 
-    // Hàm lấy lại dữ liệu giỏ hàng
+    // Hàm lấy lại dữ liệu giỏ hàng theo ID khách hàng thực tế
     fun fetchCart() {
         coroutineScope.launch {
             try {
-                val response = RetrofitClient.apiService.getCart(userId = 1)
+                val response = RetrofitClient.apiService.getCart(userId = UserSession.userId)
                 if (response.success) {
                     cartItems = response.cart_items ?: emptyList()
                     subtotal = response.subtotal ?: 0.0
@@ -79,7 +84,9 @@ fun BagScreen(navController: NavController) {
                         Image(
                             painter = rememberAsyncImagePainter(item.image_url),
                             contentDescription = item.name,
-                            modifier = Modifier.size(80.dp).clip(RoundedCornerShape(8.dp)),
+                            modifier = Modifier
+                                .size(80.dp)
+                                .clip(RoundedCornerShape(8.dp)),
                             contentScale = ContentScale.Crop
                         )
                         Spacer(modifier = Modifier.width(16.dp))
@@ -87,31 +94,65 @@ fun BagScreen(navController: NavController) {
                             Text(text = item.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                             Text(text = "${item.price} VNĐ", color = Color.Gray, fontSize = 14.sp)
                         }
-                        // Nút Tăng/Giảm số lượng
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                "-",
-                                modifier = Modifier.padding(8.dp).clickable {
-                                    if (item.quantity > 1) {
-                                        coroutineScope.launch {
-                                            RetrofitClient.apiService.addToCart(mapOf("user_id" to "1", "product_id" to item.product_id.toString(), "quantity" to "-1"))
-                                            fetchCart() // Cập nhật lại list sau khi trừ
-                                        }
-                                    }
-                                },
-                                fontWeight = FontWeight.Bold, fontSize = 20.sp
-                            )
-                            Text("${item.quantity}", fontSize = 16.sp)
-                            Text(
-                                "+",
-                                modifier = Modifier.padding(8.dp).clickable {
+
+                        // Cột chứa Nút Xóa và Nút Tăng/Giảm
+                        Column(horizontalAlignment = Alignment.End) {
+                            // NÚT XÓA MÓN ĂN
+                            IconButton(
+                                onClick = {
                                     coroutineScope.launch {
-                                        RetrofitClient.apiService.addToCart(mapOf("user_id" to "1", "product_id" to item.product_id.toString(), "quantity" to "1"))
-                                        fetchCart() // Cập nhật lại list sau khi cộng
+                                        try {
+                                            val request = mapOf(
+                                                "user_id" to UserSession.userId.toString(),
+                                                "product_id" to item.product_id.toString()
+                                            )
+                                            val response = RetrofitClient.apiService.removeFromCart(request)
+                                            if (response.success) {
+                                                Toast.makeText(context, "Đã xóa món ăn!", Toast.LENGTH_SHORT).show()
+                                                fetchCart() // Load lại giỏ hàng để cập nhật danh sách và tổng tiền
+                                            }
+                                        } catch (e: Exception) { e.printStackTrace() }
                                     }
                                 },
-                                fontWeight = FontWeight.Bold, color = primaryOrange, fontSize = 20.sp
-                            )
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(Icons.Default.Delete, contentDescription = "Xóa", tint = Color.Red)
+                            }
+
+                            // Nút Tăng/Giảm số lượng
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    "-",
+                                    modifier = Modifier
+                                        .padding(8.dp)
+                                        .clickable {
+                                            if (item.quantity > 1) {
+                                                coroutineScope.launch {
+                                                    RetrofitClient.apiService.addToCart(
+                                                        mapOf("user_id" to UserSession.userId.toString(), "product_id" to item.product_id.toString(), "quantity" to "-1")
+                                                    )
+                                                    fetchCart()
+                                                }
+                                            }
+                                        },
+                                    fontWeight = FontWeight.Bold, fontSize = 20.sp
+                                )
+                                Text("${item.quantity}", fontSize = 16.sp)
+                                Text(
+                                    "+",
+                                    modifier = Modifier
+                                        .padding(8.dp)
+                                        .clickable {
+                                            coroutineScope.launch {
+                                                RetrofitClient.apiService.addToCart(
+                                                    mapOf("user_id" to UserSession.userId.toString(), "product_id" to item.product_id.toString(), "quantity" to "1")
+                                                )
+                                                fetchCart()
+                                            }
+                                        },
+                                    fontWeight = FontWeight.Bold, color = primaryOrange, fontSize = 20.sp
+                                )
+                            }
                         }
                     }
                     Spacer(modifier = Modifier.height(16.dp))

@@ -9,11 +9,9 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -38,6 +36,7 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import com.example.foodapp.network.RetrofitClient
+import com.example.foodapp.model.UserSession
 import java.io.File
 import java.io.FileOutputStream
 
@@ -55,9 +54,12 @@ fun ProfileScreen(navController: NavController) {
     var phone by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
     var avatarUrl by remember { mutableStateOf("") }
+
     var isLoading by remember { mutableStateOf(true) }
     var isUploadingAvatar by remember { mutableStateOf(false) }
+    var isUpdatingProfile by remember { mutableStateOf(false) } // Biến theo dõi tiến trình cập nhật
 
+    // BỘ CHỌN VÀ UPLOAD ẢNH ĐẠI DIỆN
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
         onResult = { uri ->
@@ -67,10 +69,11 @@ fun ProfileScreen(navController: NavController) {
                     try {
                         val avatarPart = createMultipartBody(selectedUri, context)
                         if (avatarPart != null) {
-                            val userIdPart = "1".toRequestBody("text/plain".toMediaTypeOrNull())
+                            // ĐÃ SỬA: Lấy đúng ID thực tế thay vì gán cứng số "1"
+                            val userIdPart = UserSession.userId.toString().toRequestBody("text/plain".toMediaTypeOrNull())
                             val response = RetrofitClient.apiService.uploadAvatar(userIdPart, avatarPart)
+
                             if (response.success && response.avatar_url != null) {
-                                // Cập nhật URL mới vào biến trạng thái
                                 avatarUrl = response.avatar_url
                                 Toast.makeText(context, "Cập nhật ảnh thành công!", Toast.LENGTH_SHORT).show()
                             }
@@ -82,10 +85,11 @@ fun ProfileScreen(navController: NavController) {
         }
     )
 
+    // LẤY DỮ LIỆU BAN ĐẦU
     LaunchedEffect(Unit) {
         coroutineScope.launch {
             try {
-                val response = RetrofitClient.apiService.getProfile(1)
+                val response = RetrofitClient.apiService.getProfile(UserSession.userId)
                 if (response.success && response.user != null) {
                     firstName = response.user.first_name ?: ""
                     lastName = response.user.last_name ?: ""
@@ -101,52 +105,133 @@ fun ProfileScreen(navController: NavController) {
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Hồ sơ cá nhân", fontWeight = FontWeight.Bold) }, navigationIcon = { IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Quay lại") } }) },
-        floatingActionButton = { FloatingActionButton(onClick = { /* Gọi API updateProfile tương tự code cũ của bạn */ }, containerColor = primaryOrange, shape = CircleShape) { Icon(Icons.Default.Check, contentDescription = "Lưu", tint = Color.White) } }
+        topBar = {
+            TopAppBar(
+                title = { Text("Hồ sơ cá nhân", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Quay lại")
+                    }
+                }
+            )
+        },
+        // ---- ĐÃ THÊM LOGIC CHO NÚT CẬP NHẬT (TICK MÀU CAM) ----
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = {
+                    if (!isUpdatingProfile) {
+                        isUpdatingProfile = true
+                        coroutineScope.launch {
+                            try {
+                                val request = mapOf(
+                                    "user_id" to UserSession.userId.toString(),
+                                    "first_name" to firstName,
+                                    "last_name" to lastName,
+                                    "phone" to phone,
+                                    "address" to address,
+                                    "gender" to gender
+                                )
+                                val response = RetrofitClient.apiService.updateProfile(request)
+
+                                if (response.success) {
+                                    Toast.makeText(context, response.message ?: "Đã lưu thay đổi!", Toast.LENGTH_SHORT).show()
+                                    // Tùy chọn: Tự động đóng màn hình sau khi lưu thành công
+                                    // navController.popBackStack()
+                                } else {
+                                    Toast.makeText(context, "Lỗi: ${response.message}", Toast.LENGTH_SHORT).show()
+                                }
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Lỗi kết nối mạng!", Toast.LENGTH_SHORT).show()
+                            } finally {
+                                isUpdatingProfile = false
+                            }
+                        }
+                    }
+                },
+                containerColor = primaryOrange,
+                shape = CircleShape
+            ) {
+                if (isUpdatingProfile) {
+                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                } else {
+                    Icon(Icons.Default.Check, contentDescription = "Lưu", tint = Color.White)
+                }
+            }
+        }
     ) { padding ->
-        if (isLoading) { /* Hiển thị Loading */ }
-        else {
-            Column(modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 20.dp).verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
+        if (isLoading) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = primaryOrange)
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 20.dp)
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 Spacer(modifier = Modifier.height(24.dp))
+
+                // HIỂN THỊ ẢNH ĐẠI DIỆN
                 Box(contentAlignment = Alignment.BottomEnd) {
-                    // FIX: Thêm dấu thời gian phá cache khi hiển thị
                     val displayUrl = if (avatarUrl.isNotEmpty()) "$avatarUrl?t=${System.currentTimeMillis()}"
                     else "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150"
+
                     Image(
                         painter = rememberAsyncImagePainter(model = displayUrl),
                         contentDescription = "Avatar",
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.size(100.dp).clip(CircleShape).background(Color.LightGray)
+                        modifier = Modifier
+                            .size(100.dp)
+                            .clip(CircleShape)
+                            .background(Color.LightGray)
                     )
-                    IconButton(onClick = { photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, modifier = Modifier.size(32.dp).background(primaryOrange, CircleShape).padding(4.dp)) { Icon(Icons.Default.Edit, contentDescription = "Đổi ảnh", tint = Color.White, modifier = Modifier.size(16.dp)) }
-                    if (isUploadingAvatar) { CircularProgressIndicator(color = Color.White, modifier = Modifier.size(100.dp).padding(30.dp), strokeWidth = 5.dp) }
+                    IconButton(
+                        onClick = { photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                        modifier = Modifier
+                            .size(32.dp)
+                            .background(primaryOrange, CircleShape)
+                            .padding(4.dp)
+                    ) {
+                        Icon(Icons.Default.Edit, contentDescription = "Đổi ảnh", tint = Color.White, modifier = Modifier.size(16.dp))
+                    }
+                    if (isUploadingAvatar) {
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(100.dp).padding(30.dp), strokeWidth = 5.dp)
+                    }
                 }
-                // ... (Phần nhập liệu giữ nguyên) ...
+
                 Spacer(modifier = Modifier.height(32.dp))
                 Text("Thông tin người dùng", color = Color.Gray, fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.fillMaxWidth())
                 Spacer(modifier = Modifier.height(16.dp))
+
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     OutlinedTextField(value = firstName, onValueChange = { firstName = it }, label = { Text("Tên") }, modifier = Modifier.weight(1f))
                     OutlinedTextField(value = lastName, onValueChange = { lastName = it }, label = { Text("Họ") }, modifier = Modifier.weight(1f))
                 }
-                OutlinedTextField(value = email, onValueChange = { }, label = { Text("Email") }, modifier = Modifier.fillMaxWidth(), enabled = false)
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedTextField(value = email, onValueChange = { }, label = { Text("Email (Không thể thay đổi)") }, modifier = Modifier.fillMaxWidth(), enabled = false)
+                Spacer(modifier = Modifier.height(16.dp))
+
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     OutlinedTextField(value = gender, onValueChange = { gender = it }, label = { Text("Giới tính") }, modifier = Modifier.weight(1f))
                     OutlinedTextField(value = phone, onValueChange = { phone = it }, label = { Text("Số điện thoại") }, modifier = Modifier.weight(1.5f))
                 }
+                Spacer(modifier = Modifier.height(16.dp))
+
                 OutlinedTextField(value = address, onValueChange = { address = it }, label = { Text("Địa chỉ giao hàng mặc định") }, modifier = Modifier.fillMaxWidth())
-                Spacer(modifier = Modifier.height(100.dp))
+                Spacer(modifier = Modifier.height(100.dp)) // Tạo khoảng trống dưới cùng để không bị che bởi FAB
             }
         }
     }
 }
 
 // --- HÀM HELPER CHUYỂN URI ANDROID THÀNH FILE GỬI LÊN SERVER ---
-// Hàm này cực kỳ quan trọng vì Android scoped storage ko cho phép lấy đường dẫn file trực tiếp từ URI.
 private fun createMultipartBody(uri: Uri, context: android.content.Context): MultipartBody.Part? {
     try {
         val contentResolver = context.contentResolver
-        // 1. Lấy tên file gốc từ URI
         var fileName = "temp_avatar"
         contentResolver.query(uri, null, null, null, null)?.use { cursor ->
             if (cursor.moveToFirst()) {
@@ -155,20 +240,15 @@ private fun createMultipartBody(uri: Uri, context: android.content.Context): Mul
             }
         }
 
-        // 2. Lấy định dạng file
         val extension = MimeTypeMap.getSingleton().getExtensionFromMimeType(contentResolver.getType(uri))
-
-        // 3. Tạo một file tạm trong bộ nhớ cache của app
         val tempFile = File(context.cacheDir, fileName)
 
-        // 4. Copy dữ liệu từ URI vào file tạm đó
         contentResolver.openInputStream(uri)?.use { inputStream ->
             FileOutputStream(tempFile).use { outputStream ->
                 inputStream.copyTo(outputStream)
             }
         } ?: return null
 
-        // 5. Chuyển file tạm thành RequestBody và Part để Retrofit gửi đi
         val mediaType = contentResolver.getType(uri)?.toMediaTypeOrNull()
         val requestBody = tempFile.asRequestBody(mediaType)
         return MultipartBody.Part.createFormData("avatar", tempFile.name, requestBody)

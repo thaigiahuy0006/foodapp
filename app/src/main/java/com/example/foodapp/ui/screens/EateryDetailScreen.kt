@@ -1,5 +1,6 @@
 package com.example.foodapp.ui.screens
 
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -9,8 +10,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -27,17 +31,22 @@ import kotlinx.coroutines.launch
 
 import com.example.foodapp.model.Product
 import com.example.foodapp.model.Eatery
+import com.example.foodapp.model.UserSession
 import com.example.foodapp.network.RetrofitClient
 
 @Composable
 fun EateryDetailScreen(navController: NavController, eateryId: String = "1") {
     val primaryOrange = Color(0xFFFF6D3F)
     val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current // Lấy context để hiển thị Toast thông báo
 
-    // Khai báo các biến lưu trữ dữ liệu tải về
+    // Khai báo các biến lưu trữ dữ liệu
     var eatery by remember { mutableStateOf<Eatery?>(null) }
     var productList by remember { mutableStateOf<List<Product>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+
+    // Biến quản lý trạng thái Lưu nhà hàng (Mặc định là false)
+    var isSaved by remember { mutableStateOf(false) }
 
     // Gọi API lấy dữ liệu dựa theo eateryId
     LaunchedEffect(eateryId) {
@@ -47,6 +56,9 @@ fun EateryDetailScreen(navController: NavController, eateryId: String = "1") {
                 if (response.success) {
                     eatery = response.eatery
                     productList = response.products ?: emptyList()
+
+                    // (Tùy chọn) Nếu API của bạn có trả về trạng thái is_saved từ MySQL
+                    // isSaved = response.is_saved ?: false
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -80,7 +92,10 @@ fun EateryDetailScreen(navController: NavController, eateryId: String = "1") {
                 )
                 IconButton(
                     onClick = { navController.popBackStack() },
-                    modifier = Modifier.padding(16.dp).padding(top = 24.dp).background(Color.Black.copy(alpha = 0.4f), CircleShape)
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .padding(top = 24.dp)
+                        .background(Color.Black.copy(alpha = 0.4f), CircleShape)
                 ) {
                     Icon(Icons.Default.ArrowBack, contentDescription = "Quay lại", tint = Color.White)
                 }
@@ -90,18 +105,53 @@ fun EateryDetailScreen(navController: NavController, eateryId: String = "1") {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(text = eatery?.name ?: "Đang tải...", fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                    // Nút Info chuyển sang màn thông tin chi tiết
-                    Icon(
-                        Icons.Default.Info,
-                        contentDescription = "Thông tin",
-                        tint = primaryOrange,
-                        modifier = Modifier.size(28.dp).clickable { navController.navigate("eatery_info") }
+                    // Tên quán chiếm không gian còn lại
+                    Text(
+                        text = eatery?.name ?: "Đang tải...",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f)
                     )
+
+                    // ---- NÚT LƯU YÊU THÍCH (TRÁI TIM) ----
+                    IconButton(onClick = {
+                        coroutineScope.launch {
+                            try {
+                                val request = mapOf(
+                                    "user_id" to UserSession.userId.toString(),
+                                    "restaurant_id" to eateryId
+                                )
+                                // Gọi API Toggle
+                                val response = RetrofitClient.apiService.toggleSavedEatery(request)
+
+                                if (response.success) {
+                                    isSaved = response.is_saved ?: false
+                                    Toast.makeText(context, response.message, Toast.LENGTH_SHORT).show()
+                                }
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Lỗi kết nối mạng!", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }) {
+                        Icon(
+                            imageVector = if (isSaved) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                            contentDescription = "Lưu nhà hàng",
+                            tint = if (isSaved) primaryOrange else Color.Gray
+                        )
+                    }
+
+                    // ---- NÚT THÔNG TIN ----
+                    IconButton(onClick = { navController.navigate("eatery_info") }) {
+                        Icon(
+                            Icons.Default.Info,
+                            contentDescription = "Thông tin",
+                            tint = primaryOrange
+                        )
+                    }
                 }
+
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Star, contentDescription = "Đánh giá", tint = Color(0xFFFFC107), modifier = Modifier.size(16.dp))
@@ -111,7 +161,7 @@ fun EateryDetailScreen(navController: NavController, eateryId: String = "1") {
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
-                Text(text = "Thực đơn", fontSize = 18.sp, fontWeight = FontWeight.Bold) // ĐÃ VIỆT HÓA
+                Text(text = "Thực đơn", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(12.dp))
 
                 // ---- HIỂN THỊ DANH SÁCH MÓN ĂN TỪ MYSQL ----
@@ -123,7 +173,6 @@ fun EateryDetailScreen(navController: NavController, eateryId: String = "1") {
                                 .fillMaxWidth()
                                 .padding(vertical = 12.dp)
                                 .clickable {
-                                    // QUAN TRỌNG: Truyền ID món ăn sang màn hình Chi tiết món!
                                     navController.navigate("product_detail/${product.id}")
                                 },
                             verticalAlignment = Alignment.CenterVertically
@@ -132,7 +181,9 @@ fun EateryDetailScreen(navController: NavController, eateryId: String = "1") {
                                 painter = rememberAsyncImagePainter(product.image_url),
                                 contentDescription = product.name,
                                 contentScale = ContentScale.Crop,
-                                modifier = Modifier.size(80.dp).clip(RoundedCornerShape(8.dp))
+                                modifier = Modifier
+                                    .size(80.dp)
+                                    .clip(RoundedCornerShape(8.dp))
                             )
                             Spacer(modifier = Modifier.width(16.dp))
                             Column(modifier = Modifier.weight(1f)) {

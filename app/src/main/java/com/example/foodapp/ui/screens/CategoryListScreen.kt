@@ -94,7 +94,7 @@ fun CategoryListScreen(navController: NavController, categoryId: String = "1", c
                             eateryId = eatery.id.toString(), // Truyền ID của quán để bấm vào xem chi tiết
                             name = eatery.name,
                             address = eatery.address ?: "Đang cập nhật địa chỉ",
-                            imageUrl = eatery.image_url,
+                            imageUrl = eatery.image_url ?:"",
                             rating = eatery.rating.toString(),
                             distance = eatery.distance ?: "1 km"
                         )

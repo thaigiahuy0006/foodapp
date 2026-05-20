@@ -24,6 +24,9 @@ interface ApiService {
     @POST("register.php")
     suspend fun register(@Body request: Map<String, String>): ApiResponse
 
+    @POST("admin_register.php")
+    suspend fun adminRegister(@Body request: Map<String, String>): ApiResponse
+
     @POST("login.php")
     suspend fun login(@Body request: Map<String, String>): ApiResponse
 
@@ -47,7 +50,7 @@ interface ApiService {
     suspend fun getOrders(
         @Query("user_id") userId: Int,
         @Query("status") status: String
-    ): List<Order>
+    ): ApiResponse
     @GET("get_eatery_details.php")
     suspend fun getEateryDetails(@Query("id") eateryId: String): EateryDetailResponse
 
@@ -68,4 +71,67 @@ interface ApiService {
         @Part("user_id") userId: RequestBody, // user_id gửi dạng text
         @Part avatar: MultipartBody.Part      // file ảnh gửi dạng file
     ): UploadAvatarResponse
+    @POST("admin_login.php")
+    suspend fun adminLogin(@Body request: Map<String, String>): ApiResponse
+
+
+// API Quản lý món ăn
+    @GET("admin_manage_products.php?action=get_all")
+    suspend fun adminGetAllProducts(@Query("eatery_id") eateryId: Int): List<Map<String, String>>
+
+    @POST("admin_manage_products.php?action=add")
+    suspend fun adminAddProduct(@Body product: Map<String, String>): ApiResponse
+
+    @GET("admin_manage_products.php?action=delete")
+    suspend fun adminDeleteProduct(@Query("id") id: Int): ApiResponse
+
+    @POST("admin_manage_products.php?action=toggle_status")
+    suspend fun adminToggleProductStatus(@Body request: Map<String, String>): ApiResponse
+
+    @POST("admin_manage_products.php?action=update")
+    suspend fun adminUpdateProduct(@Body product: Map<String, String>): ApiResponse
+
+
+
+
+    // Quản lý danh mục
+    @POST("admin_manage_categories.php?action=add")
+    suspend fun adminAddCategory(@Body category: Map<String, String>): ApiResponse
+
+    // API Xóa sản phẩm khỏi giỏ hàng
+    @POST("remove_from_cart.php")
+    suspend fun removeFromCart(@Body request: Map<String, String>): ApiResponse
+
+    @POST("toggle_saved.php")
+    suspend fun toggleSavedEatery(@Body request: Map<String, String>): ApiResponse // ApiResponse có thể cần thêm trường is_saved: Boolean?
+
+    // Lấy danh sách nhà hàng đã lưu
+    @GET("get_saved_eateries.php")
+    suspend fun getSavedEateries(@Query("user_id") userId: Int): ApiResponse
+
+    // ==========================================
+    // API QUẢN LÝ ĐƠN HÀNG (DÙNG FILE GỘP CHUNG)
+    // ==========================================
+
+    @GET("admin_manage_orders.php?action=get_all")
+    suspend fun adminGetAllOrders(): List<Map<String, String>>
+
+    @POST("admin_manage_orders.php?action=update_status")
+    suspend fun adminUpdateOrderStatus(@Body request: Map<String, String>): ApiResponse
+
+    @GET("admin_manage_orders.php?action=delete")
+    suspend fun adminDeleteOrder(@Query("id") id: Int): ApiResponse
+
+    // API Quản lý hồ sơ nhà hàng
+    @GET("admin_profile.php?action=get")
+    suspend fun adminGetProfile(@Query("id") id: Int): Map<String, Any>  // Hãy đảm bảo ApiResponse của bạn có trường "data: Map<String, String>?" hoặc tương tự
+
+    @POST("admin_profile.php?action=toggle_open")
+    suspend fun adminToggleOpenStatus(@Body request: Map<String, String>): ApiResponse
+
+    @POST("admin_profile.php?action=update_info")
+    suspend fun adminUpdateProfileInfo(@Body request: Map<String, String>): ApiResponse
+
+    @GET("admin_profile.php?action=delete_account")
+    suspend fun adminDeleteRestaurantAccount(@Query("id") id: Int): ApiResponse
 }

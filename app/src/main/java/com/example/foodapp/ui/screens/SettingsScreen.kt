@@ -23,6 +23,7 @@ import coil.compose.rememberAsyncImagePainter
 import kotlinx.coroutines.launch
 import com.example.foodapp.model.UserProfile
 import com.example.foodapp.network.RetrofitClient
+import com.example.foodapp.model.UserSession
 
 @Composable
 fun SettingsScreen(navController: NavController) {
@@ -33,7 +34,7 @@ fun SettingsScreen(navController: NavController) {
     LaunchedEffect(Unit) {
         coroutineScope.launch {
             try {
-                val response = RetrofitClient.apiService.getProfile(1)
+                val response = RetrofitClient.apiService.getProfile(UserSession.userId)
                 if (response.success) { userProfile = response.user }
             } catch (e: Exception) { e.printStackTrace() }
         }
@@ -53,9 +54,9 @@ fun SettingsScreen(navController: NavController) {
             Box(modifier = Modifier.fillMaxWidth().height(220.dp)) {
                 Image(painter = rememberAsyncImagePainter("https://images.unsplash.com/photo-1557683316-973673baf926?q=80&w=800"), contentDescription = "Background", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
                 Column(modifier = Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-                    // FIX: Hiển thị avatar thực từ database
                     val avatarPath = if (!userProfile?.avatar_url.isNullOrEmpty()) "${userProfile?.avatar_url}?t=${System.currentTimeMillis()}"
                     else "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150"
+
                     Image(
                         painter = rememberAsyncImagePainter(model = avatarPath),
                         contentDescription = "Avatar",
@@ -66,23 +67,48 @@ fun SettingsScreen(navController: NavController) {
                     Text(text = "${userProfile?.last_name ?: ""} ${userProfile?.first_name ?: ""}".trim(), fontWeight = FontWeight.Bold, fontSize = 20.sp, color = Color.Black)
                 }
             }
+
             Column(modifier = Modifier.background(Color.White)) {
                 SettingsMenuItem(icon = Icons.Default.Person, title = "Hồ sơ & Địa chỉ", onClick = { navController.navigate("profile") })
                 HorizontalDivider(color = Color.LightGray.copy(alpha = 0.3f))
+
+                // ---- MỚI THÊM: LỊCH SỬ MUA HÀNG ----
+                SettingsMenuItem(icon = Icons.Default.ShoppingCart, title = "Lịch sử mua hàng", onClick = { navController.navigate("order_history") })
+                HorizontalDivider(color = Color.LightGray.copy(alpha = 0.3f))
+                // ------------------------------------
+
                 SettingsMenuItem(icon = Icons.Default.Info, title = "Về chúng tôi", onClick = { navController.navigate("about_us") })
                 HorizontalDivider(color = Color.LightGray.copy(alpha = 0.3f))
-                SettingsMenuItem(icon = Icons.AutoMirrored.Filled.ExitToApp, title = "Đăng xuất", titleColor = primaryOrange, iconColor = primaryOrange, showArrow = false, onClick = { navController.navigate("login") { popUpTo(0) } })
+
+                SettingsMenuItem(icon = Icons.AutoMirrored.Filled.ExitToApp, title = "Đăng xuất", titleColor = primaryOrange, iconColor = primaryOrange, showArrow = false, onClick = {
+                    navController.navigate("login") { popUpTo(0) }
+                })
             }
         }
     }
 }
-// ... (Hàm SettingsMenuItem giữ nguyên) ...
+
 @Composable
-fun SettingsMenuItem(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, titleColor: Color = Color.DarkGray, iconColor: Color = Color.DarkGray, showArrow: Boolean = true, onClick: () -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+fun SettingsMenuItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    titleColor: Color = Color.DarkGray,
+    iconColor: Color = Color.DarkGray,
+    showArrow: Boolean = true,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Icon(icon, contentDescription = title, tint = iconColor)
         Spacer(modifier = Modifier.width(16.dp))
         Text(text = title, fontWeight = FontWeight.Medium, fontSize = 16.sp, color = titleColor, modifier = Modifier.weight(1f))
-        if (showArrow) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Go", tint = Color(0xFFFF6D3F)) }
+        if (showArrow) {
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Go", tint = Color(0xFFFF6D3F))
+        }
     }
 }
