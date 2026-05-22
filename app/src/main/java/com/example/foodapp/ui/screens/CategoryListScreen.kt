@@ -1,6 +1,5 @@
 package com.example.foodapp.ui.screens
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -9,6 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,7 +21,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import coil.compose.rememberAsyncImagePainter
+import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 
 // Import Model và Retrofit
@@ -94,7 +94,7 @@ fun CategoryListScreen(navController: NavController, categoryId: String = "1", c
                             eateryId = eatery.id.toString(), // Truyền ID của quán để bấm vào xem chi tiết
                             name = eatery.name,
                             address = eatery.address ?: "Đang cập nhật địa chỉ",
-                            imageUrl = eatery.image_url ?:"",
+                            imageUrl = eatery.image_url ?: "",
                             rating = eatery.rating.toString(),
                             distance = eatery.distance ?: "1 km"
                         )
@@ -128,15 +128,39 @@ fun CategoryEateryItem(
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Image(
-                painter = rememberAsyncImagePainter(imageUrl),
-                contentDescription = name,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .size(80.dp)
-                    .clip(RoundedCornerShape(8.dp))
-            )
+            // ==========================================
+            // ĐÃ NÂNG CẤP: Dùng AsyncImage vẽ ảnh mượt mà
+            // ==========================================
+            if (imageUrl.isNotBlank()) {
+                AsyncImage(
+                    model = imageUrl,
+                    contentDescription = name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(80.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFFEEEEEE)) // Màu nền nhẹ lúc đang tải ảnh
+                )
+            } else {
+                // FALLBACK: Trạng thái dự phòng nếu link ảnh bị rỗng
+                Box(
+                    modifier = Modifier
+                        .size(80.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFFE0E0E0)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Home,
+                        contentDescription = "Không có ảnh",
+                        tint = Color.White,
+                        modifier = Modifier.size(40.dp)
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.width(16.dp))
+
             Column(modifier = Modifier.weight(1f)) {
                 Text(text = name, fontWeight = FontWeight.Bold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(modifier = Modifier.height(4.dp))

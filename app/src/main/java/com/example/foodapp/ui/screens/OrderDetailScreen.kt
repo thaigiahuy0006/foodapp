@@ -1,118 +1,219 @@
 package com.example.foodapp.ui.screens
 
-import androidx.compose.foundation.Image
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import coil.compose.rememberAsyncImagePainter
+import coil.compose.AsyncImage
+import kotlinx.coroutines.launch
+import com.example.foodapp.network.RetrofitClient
 
 @Composable
-fun OrderDetailScreen(navController: NavController) {
+fun OrderDetailScreen(navController: NavController, orderId: String) {
     val primaryOrange = Color(0xFFFF6D3F)
     val successGreen = Color(0xFF4CAF50)
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
 
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = Color(0xFF12151C) // Nền tối
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp).padding(top = 40.dp)
-        ) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White)
-            ) {
-                LazyColumn(modifier = Modifier.padding(16.dp)) {
-                    item {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Order Id", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.DarkGray)
-                            Text("he11KBUX0z4etvPPW6pQ", color = Color.Gray, fontSize = 14.sp)
-                        }
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Order Status", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.DarkGray)
-                            Text("Completed", color = successGreen, fontWeight = FontWeight.Bold)
-                        }
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("Order time", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.DarkGray)
-                            Text("14 thg 6, 2022 14:37:10", color = Color.Gray, fontSize = 14.sp)
-                        }
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Divider(color = Color.LightGray.copy(alpha = 0.5f))
-                        Spacer(modifier = Modifier.height(16.dp))
-                    }
+    var orderInfo by remember { mutableStateOf<Map<String, Any>?>(null) }
+    var itemsList by remember { mutableStateOf<List<Map<String, Any>>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
 
-                    item {
-                        Text("Deliver to", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.DarkGray)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("VRJ6+8HH, Đông Hoà, Dĩ An, Bình Dương, Việt Nam", color = Color.Gray, fontSize = 14.sp)
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Divider(color = Color.LightGray.copy(alpha = 0.5f))
-                        Spacer(modifier = Modifier.height(16.dp))
-                    }
+    LaunchedEffect(orderId) {
+        coroutineScope.launch {
+            try {
+                val response = RetrofitClient.apiService.getOrderDetails(orderId.toInt())
+                if (response["success"] == true) {
+                    orderInfo = response["order"] as? Map<String, Any>
+                    itemsList = (response["items"] as? List<Map<String, Any>>) ?: emptyList()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                Toast.makeText(context, "Lỗi mạng: ${e.message}", Toast.LENGTH_SHORT).show()
+            } finally {
+                isLoading = false
+            }
+        }
+    }
 
-                    item {
-                        Text("Contact", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.DarkGray)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("Phú Quang, 035431...", color = Color.Gray, fontSize = 14.sp)
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Divider(color = Color.LightGray.copy(alpha = 0.5f))
-                        Spacer(modifier = Modifier.height(16.dp))
-                    }
+    Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF12151C)) {
+        if (isLoading) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = primaryOrange)
+            }
+        } else if (orderInfo == null) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("Không tải được chi tiết đơn hàng", color = Color.White)
+            }
+        } else {
+            val status = orderInfo!!["status"]?.toString() ?: "Pending"
+            val statusColor = when (status) {
+                "Completed" -> successGreen
+                "Cancelled" -> Color.Red
+                "Shipping" -> Color(0xFF2196F3)
+                else -> primaryOrange
+            }
 
-                    item {
-                        Text("Order summary", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.DarkGray)
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        // Món 1
-                        Row(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Image(
-                                painter = rememberAsyncImagePainter("https://images.unsplash.com/photo-1546173159-315724a31696?q=80&w=200"),
-                                contentDescription = "Cơm tấm",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.size(60.dp).clip(RoundedCornerShape(8.dp))
-                            )
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(text = "Cơm tấm", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                Text(text = "x 2", color = Color.Gray, fontSize = 14.sp)
+            Column(modifier = Modifier.fillMaxSize().padding(16.dp).padding(top = 40.dp)) {
+                Card(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White)
+                ) {
+                    LazyColumn(modifier = Modifier.padding(16.dp)) {
+                        item {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Mã đơn hàng", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.DarkGray)
+                                Text("#$orderId", color = Color.Gray, fontSize = 14.sp)
                             }
-                            Text(text = "50000.0 VND", color = primaryOrange, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Trạng thái", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.DarkGray)
+                                Text(status, color = statusColor, fontWeight = FontWeight.Bold)
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Thời gian đặt", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.DarkGray)
+                                Text(orderInfo!!["created_at"]?.toString() ?: "", color = Color.Gray, fontSize = 14.sp)
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                            HorizontalDivider(color = Color.LightGray.copy(alpha = 0.5f))
+                            Spacer(modifier = Modifier.height(16.dp))
                         }
 
-                        Divider(color = Color.LightGray.copy(alpha = 0.5f))
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text("Total", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                            Text("105000.0 VND", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = primaryOrange)
+                        item {
+                            Text("Giao đến", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.DarkGray)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(orderInfo!!["address"]?.toString() ?: "", color = Color.Gray, fontSize = 14.sp)
+                            Spacer(modifier = Modifier.height(16.dp))
+                            HorizontalDivider(color = Color.LightGray.copy(alpha = 0.5f))
+                            Spacer(modifier = Modifier.height(16.dp))
                         }
 
-                        Spacer(modifier = Modifier.height(24.dp))
-                        Button(
-                            onClick = { navController.popBackStack() }, // Đóng thẻ
-                            modifier = Modifier.fillMaxWidth().height(50.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = primaryOrange),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("CLOSE", fontWeight = FontWeight.Bold, color = Color.White)
+                        item {
+                            Text("Liên hệ", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.DarkGray)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("SĐT: ${orderInfo!!["phone"]?.toString() ?: ""}", color = Color.Gray, fontSize = 14.sp)
+                            Spacer(modifier = Modifier.height(16.dp))
+                            HorizontalDivider(color = Color.LightGray.copy(alpha = 0.5f))
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
+
+                        item {
+                            Text("Tóm tắt món ăn", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.DarkGray)
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
+
+                        items(itemsList.size) { index ->
+                            val product = itemsList[index]
+                            val qty = (product["quantity"] as? Double)?.toInt() ?: product["quantity"].toString()
+
+                            Row(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                AsyncImage(
+                                    model = product["image_url"]?.toString() ?: "",
+                                    contentDescription = "Hình món",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.size(60.dp).clip(RoundedCornerShape(8.dp)).background(Color.LightGray)
+                                )
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(text = product["name"]?.toString() ?: "", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                    Text(text = "x $qty", color = Color.Gray, fontSize = 14.sp)
+                                }
+                                Text(text = "${product["price"]} VND", color = primaryOrange, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        item {
+                            HorizontalDivider(color = Color.LightGray.copy(alpha = 0.5f))
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Text("Tổng cộng", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                                Text("${orderInfo!!["total_price"]} VND", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = primaryOrange)
+                            }
+                            Spacer(modifier = Modifier.height(24.dp))
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Nút Đóng
+                Button(
+                    onClick = { navController.popBackStack() },
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = primaryOrange),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("ĐÓNG", fontWeight = FontWeight.Bold, color = Color.White)
+                }
+
+                // Nút Hủy Đơn Hàng (Chỉ hiện ra khi quán chưa xác nhận làm món)
+                if (status == "Pending") {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedButton(
+                        onClick = {
+                            coroutineScope.launch {
+                                try {
+                                    val request = mapOf("order_id" to orderId)
+                                    val response = RetrofitClient.apiService.cancelOrder(request)
+                                    if (response.success) {
+                                        Toast.makeText(context, "Đã hủy đơn hàng thành công!", Toast.LENGTH_SHORT).show()
+                                        navController.popBackStack()
+                                    }
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Lỗi mạng", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("HỦY ĐƠN HÀNG", fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                // Nút Đã Nhận Hàng (Chỉ hiện ra khi quán đã chuyển trạng thái sang Shipping)
+                if (status == "Shipping") {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = {
+                            coroutineScope.launch {
+                                try {
+                                    val request = mapOf("order_id" to orderId, "status" to "Completed")
+                                    val response = RetrofitClient.apiService.updateOrderStatus(request)
+                                    if (response.success) {
+                                        Toast.makeText(context, "Cảm ơn bạn đã xác nhận!", Toast.LENGTH_SHORT).show()
+                                        navController.popBackStack()
+                                    }
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Lỗi mạng", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = successGreen),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("ĐÃ NHẬN ĐƯỢC HÀNG", fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }

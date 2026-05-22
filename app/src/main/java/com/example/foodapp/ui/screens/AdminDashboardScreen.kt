@@ -62,7 +62,6 @@ fun AdminDashboardScreen(navController: NavController) {
                 }
             }
 
-            // Điều hướng Tab chính
             when (selectedTab) {
                 0 -> AdminOrderTab(primaryOrange)
                 1 -> AdminMenuTab(primaryOrange)
@@ -73,7 +72,7 @@ fun AdminDashboardScreen(navController: NavController) {
 }
 
 // ========================================================
-// 1. PHÂN HỆ ĐƠN HÀNG (HIỆN TẠI & LỊCH SỬ)
+// 1. PHÂN HỆ ĐƠN HÀNG (Gồm HÀNG HIỆN TẠI & LỊCH SỬ)
 // ========================================================
 @Composable
 fun AdminOrderTab(themeColor: Color) {
@@ -124,8 +123,8 @@ fun AdminOrderTab(themeColor: Color) {
 fun CurrentOrdersScreen(ordersList: List<Map<String, String>>, themeColor: Color, onRefresh: () -> Unit) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-
-    val currentOrders = ordersList.filter { it["status"] != "Completed" && it["status"] != "Hoàn thành" }
+    // Lọc bỏ đơn đã hủy và hoàn thành
+    val currentOrders = ordersList.filter { it["status"] != "Completed" && it["status"] != "Hoàn thành" && it["status"] != "Cancelled" }
 
     if (currentOrders.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -136,6 +135,7 @@ fun CurrentOrdersScreen(ordersList: List<Map<String, String>>, themeColor: Color
             items(currentOrders.size) { index ->
                 val order = currentOrders[index]
                 var expanded by remember { mutableStateOf(false) }
+                val status = order["status"] ?: "Pending"
 
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -145,7 +145,7 @@ fun CurrentOrdersScreen(ordersList: List<Map<String, String>>, themeColor: Color
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text("Đơn hàng #${order["id"]}", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            Text(order["status"] ?: "Pending", color = themeColor, fontWeight = FontWeight.Bold)
+                            Text(status, color = if(status == "Shipping") Color(0xFF2196F3) else themeColor, fontWeight = FontWeight.Bold)
                         }
                         Spacer(modifier = Modifier.height(4.dp))
                         Text("Khách hàng: ${order["email"] ?: "Không rõ"}", color = Color.Gray, fontSize = 14.sp)
@@ -160,23 +160,37 @@ fun CurrentOrdersScreen(ordersList: List<Map<String, String>>, themeColor: Color
                                 Text("Thanh toán: ${order["payment_method"] ?: "Tiền mặt"}", fontSize = 14.sp)
 
                                 Spacer(modifier = Modifier.height(12.dp))
-                                Button(
-                                    onClick = {
-                                        coroutineScope.launch {
-                                            try {
-                                                val response = RetrofitClient.apiService.adminUpdateOrderStatus(mapOf("id" to order["id"]!!, "status" to "Completed"))
-                                                if(response.success) {
-                                                    Toast.makeText(context, "Đã hoàn thành đơn hàng!", Toast.LENGTH_SHORT).show()
-                                                    onRefresh()
-                                                }
-                                            } catch (e: Exception) { Toast.makeText(context, "Lỗi mạng", Toast.LENGTH_SHORT).show() }
-                                        }
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Text("XÁC NHẬN HOÀN THÀNH", color = Color.White, fontWeight = FontWeight.Bold)
+
+                                // LOGIC XÁC NHẬN GIAO HÀNG
+                                if (status == "Pending") {
+                                    Button(
+                                        onClick = {
+                                            coroutineScope.launch {
+                                                try {
+                                                    val response = RetrofitClient.apiService.adminUpdateOrderStatus(mapOf("id" to order["id"]!!, "status" to "Shipping"))
+                                                    if(response.success) {
+                                                        Toast.makeText(context, "Đã chuyển cho Shipper!", Toast.LENGTH_SHORT).show()
+                                                        onRefresh()
+                                                    }
+                                                } catch (e: Exception) { Toast.makeText(context, "Lỗi mạng", Toast.LENGTH_SHORT).show() }
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3)),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text("XÁC NHẬN GIAO HÀNG", color = Color.White, fontWeight = FontWeight.Bold)
+                                    }
+                                } else if (status == "Shipping") {
+                                    Button(
+                                        onClick = { },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color.LightGray),
+                                        shape = RoundedCornerShape(8.dp),
+                                        enabled = false
+                                    ) {
+                                        Text("ĐANG GIAO (CHỜ KHÁCH XÁC NHẬN)", color = Color.DarkGray, fontWeight = FontWeight.Bold)
+                                    }
                                 }
                             }
                         }
@@ -417,25 +431,32 @@ fun MenuSettingsScreen(productsList: List<Map<String, String>>, themeColor: Colo
                 Button(
                     onClick = {
                         coroutineScope.launch {
-                            val request = mutableMapOf(
-                                "name" to name,
-                                "price" to price,
-                                "description" to desc,
-                                "image_url" to image
-                            )
+                            try {
+                                val request = mutableMapOf(
+                                    "name" to name,
+                                    "price" to price,
+                                    "description" to desc,
+                                    "image_url" to image
+                                )
 
-                            val response = if (isEditMode) {
-                                request["id"] = currentProductId
-                                RetrofitClient.apiService.adminUpdateProduct(request)
-                            } else {
-                                request["eatery_id"] = com.example.foodapp.model.UserSession.restaurantId.toString()
-                                RetrofitClient.apiService.adminAddProduct(request)
-                            }
+                                val response = if (isEditMode) {
+                                    request["id"] = currentProductId
+                                    RetrofitClient.apiService.adminUpdateProduct(request)
+                                } else {
+                                    request["eatery_id"] = com.example.foodapp.model.UserSession.restaurantId.toString()
+                                    RetrofitClient.apiService.adminAddProduct(request)
+                                }
 
-                            if (response.success) {
-                                Toast.makeText(context, "Thành công!", Toast.LENGTH_SHORT).show()
-                                showDialog = false
-                                onRefresh()
+                                if (response.success) {
+                                    Toast.makeText(context, "Thành công!", Toast.LENGTH_SHORT).show()
+                                    showDialog = false
+                                    onRefresh()
+                                } else {
+                                    Toast.makeText(context, "Lỗi từ Server: ${response.message}", Toast.LENGTH_LONG).show()
+                                }
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                                Toast.makeText(context, "Lỗi văng App: ${e.message}", Toast.LENGTH_LONG).show()
                             }
                         }
                     },
@@ -489,11 +510,13 @@ fun MenuSettingsScreen(productsList: List<Map<String, String>>, themeColor: Colo
 
                         IconButton(onClick = {
                             coroutineScope.launch {
-                                val response = RetrofitClient.apiService.adminDeleteProduct(product["id"]?.toInt() ?: 0)
-                                if (response.success) {
-                                    Toast.makeText(context, "Đã xóa!", Toast.LENGTH_SHORT).show()
-                                    onRefresh()
-                                }
+                                try {
+                                    val response = RetrofitClient.apiService.adminDeleteProduct(product["id"]?.toInt() ?: 0)
+                                    if (response.success) {
+                                        Toast.makeText(context, "Đã xóa!", Toast.LENGTH_SHORT).show()
+                                        onRefresh()
+                                    }
+                                } catch (e: Exception) { e.printStackTrace() }
                             }
                         }) {
                             Icon(Icons.Default.Delete, contentDescription = "Xóa", tint = Color.Red)
@@ -517,7 +540,7 @@ fun AdminProfileTab(themeColor: Color, navController: NavController) {
     var resName by remember { mutableStateOf("") }
     var resAddress by remember { mutableStateOf("") }
     var resPhone by remember { mutableStateOf("") }
-    var resAvatar by remember { mutableStateOf("") } // Không khởi tạo cứng URL nữa
+    var resAvatar by remember { mutableStateOf("") }
     var isOpen by remember { mutableStateOf(true) }
 
     var isSettingExpanded by remember { mutableStateOf(false) }
@@ -528,30 +551,26 @@ fun AdminProfileTab(themeColor: Color, navController: NavController) {
     LaunchedEffect(refreshTrigger) {
         coroutineScope.launch {
             try {
-                // Gọi API lấy profile theo đúng ID của quán đang đăng nhập
                 val response = RetrofitClient.apiService.adminGetProfile(restaurantId)
-
                 if (response["success"] == true) {
-                    // Ép kiểu cụm dữ liệu "data" thành một Map để lấy từng trường
                     val data = response["data"] as? Map<*, *>
                     if (data != null) {
-                        resName = data["name"]?.toString() ?: ""
+                        resName = data["name"]?.toString() ?: com.example.foodapp.model.UserSession.restaurantName
                         resAddress = data["address"]?.toString() ?: ""
                         resPhone = data["phone"]?.toString() ?: ""
                         resAvatar = data["avatar_url"]?.toString() ?: ""
 
-                        // Cập nhật luôn trạng thái đóng/mở cửa từ DB (1 là true, 0 là false)
                         val isOpenStatus = data["is_open"]?.toString() ?: "1"
                         isOpen = isOpenStatus == "1"
                     }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+                resName = com.example.foodapp.model.UserSession.restaurantName
             }
         }
     }
 
-    // ĐÃ THÊM: verticalScroll để giải quyết vấn đề không cuộn được
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -559,7 +578,6 @@ fun AdminProfileTab(themeColor: Color, navController: NavController) {
             .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // --- KHỐI ĐẦU GIAO DIỆN: ẢNH VÀ TÊN NHÀ HÀNG ---
         Card(
             colors = CardDefaults.cardColors(containerColor = Color.White),
             modifier = Modifier.fillMaxWidth(),
@@ -570,7 +588,6 @@ fun AdminProfileTab(themeColor: Color, navController: NavController) {
                 modifier = Modifier.padding(16.dp).fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Logic xử lý Avatar
                 if (resAvatar.isNotBlank()) {
                     androidx.compose.foundation.Image(
                         painter = rememberAsyncImagePainter(resAvatar),
@@ -579,7 +596,6 @@ fun AdminProfileTab(themeColor: Color, navController: NavController) {
                         contentScale = ContentScale.Crop
                     )
                 } else {
-                    // Trạng thái trống (Default Avatar)
                     Box(
                         modifier = Modifier
                             .size(90.dp)
@@ -607,8 +623,6 @@ fun AdminProfileTab(themeColor: Color, navController: NavController) {
         }
 
         Spacer(modifier = Modifier.height(24.dp))
-
-        // --- CHỮ CÀI ĐẶT NHỎ ---
         Text(
             text = "Cài đặt",
             fontSize = 14.sp,
@@ -617,7 +631,6 @@ fun AdminProfileTab(themeColor: Color, navController: NavController) {
             modifier = Modifier.fillMaxWidth().padding(start = 4.dp, bottom = 8.dp)
         )
 
-        // --- MỤC TÌNH TRẠNG QUÁN (ON/OFF) ---
         Card(
             colors = CardDefaults.cardColors(containerColor = Color.White),
             modifier = Modifier.fillMaxWidth(),
@@ -653,8 +666,6 @@ fun AdminProfileTab(themeColor: Color, navController: NavController) {
         }
 
         Spacer(modifier = Modifier.height(12.dp))
-
-        // --- MỤC CÀI ĐẶT CỬA HÀNG (MỞ RỘNG) ---
         Card(
             colors = CardDefaults.cardColors(containerColor = Color.White),
             modifier = Modifier.fillMaxWidth(),
@@ -707,10 +718,7 @@ fun AdminProfileTab(themeColor: Color, navController: NavController) {
             }
         }
 
-        // ĐÃ XÓA Spacer(weight(1f)) làm sập layout khi cuộn, thay bằng Spacer tĩnh.
         Spacer(modifier = Modifier.height(40.dp))
-
-        // --- NÚT ĐĂNG XUẤT ---
         Button(
             onClick = { navController.navigate("login") { popUpTo(0) } },
             modifier = Modifier.fillMaxWidth().height(50.dp),

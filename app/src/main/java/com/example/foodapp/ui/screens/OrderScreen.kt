@@ -32,7 +32,7 @@ fun OrderScreen(navController: NavController) {
 
     // Quản lý trạng thái Tab
     var selectedTabIndex by remember { mutableStateOf(0) }
-    val tabs = listOf("Upcoming", "Ongoing", "History")
+    val tabs = listOf("Sắp Tới", "Đang Giao", "Lịch Sử")
 
     // Ánh xạ tab index sang trạng thái trong Database
     val statusMap = listOf("Pending", "Shipping", "Completed")

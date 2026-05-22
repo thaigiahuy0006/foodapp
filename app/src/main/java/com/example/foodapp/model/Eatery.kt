@@ -7,5 +7,6 @@ data class Eatery(
     val distance: String?,
     val rating: Double?,
     val image_url: String?,
+
     val description: String?
 )

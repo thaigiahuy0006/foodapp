@@ -80,7 +80,7 @@ interface ApiService {
     suspend fun adminGetAllProducts(@Query("eatery_id") eateryId: Int): List<Map<String, String>>
 
     @POST("admin_manage_products.php?action=add")
-    suspend fun adminAddProduct(@Body product: Map<String, String>): ApiResponse
+    suspend fun adminAddProduct(@Body request: Map<String, String>): ApiResponse
 
     @GET("admin_manage_products.php?action=delete")
     suspend fun adminDeleteProduct(@Query("id") id: Int): ApiResponse
@@ -134,4 +134,15 @@ interface ApiService {
 
     @GET("admin_profile.php?action=delete_account")
     suspend fun adminDeleteRestaurantAccount(@Query("id") id: Int): ApiResponse
+    // API Lấy chi tiết các món trong đơn hàng
+    @GET("get_order_details.php")
+    suspend fun getOrderDetails(@Query("order_id") orderId: Int): Map<String, Any>
+
+    // API Hủy đơn hàng
+    @POST("cancel_order.php")
+    suspend fun cancelOrder(@Body request: Map<String, String>): ApiResponse
+    // API Khách hàng cập nhật trạng thái đơn hàng (Đã nhận hàng)
+    @POST("update_order_status.php")
+    suspend fun updateOrderStatus(@Body request: Map<String, String>): ApiResponse
+
 }

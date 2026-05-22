@@ -88,8 +88,13 @@ fun FoodAppNavigation() {
 
         // 6. Cụm Thanh toán & Đơn hàng
         composable("checkout") { CheckoutScreen(navController) }
-        composable("order_detail") { OrderDetailScreen(navController) }
-        // 7. Phân hệ Admin / Nhà hàng
+        composable("order_detail/{orderId}") { backStackEntry ->
+            // Lấy cái ID từ đường dẫn
+            val orderId = backStackEntry.arguments?.getString("orderId") ?: ""
+
+            // Gắn nó vào màn hình
+            OrderDetailScreen(navController = navController, orderId = orderId)
+        }        // 7. Phân hệ Admin / Nhà hàng
         composable("admin_dashboard") { AdminDashboardScreen(navController) }
         // THÊM DÒNG NÀY VÀO TRONG NAVHOST CỦA BẠN:
         composable("order_history") {

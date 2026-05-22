@@ -2,7 +2,7 @@ package com.example.foodapp.model
 
 data class ApiResponse(
     val success: Boolean,
-    val message: String?,
+    val message: String? = null,
     val user_id: Int?,
     val restaurant_id: Int?,
     val restaurant_name: String?,
