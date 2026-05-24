@@ -86,7 +86,11 @@ fun AdminOrderTab(themeColor: Color) {
     LaunchedEffect(refreshTrigger) {
         coroutineScope.launch {
             try {
-                ordersList = RetrofitClient.apiService.adminGetAllOrders()
+                // Lấy ID của quán hiện tại từ Session
+                val eateryId = com.example.foodapp.model.UserSession.restaurantId.toString().toIntOrNull() ?: 1
+
+                // Truyền ID vào hàm gọi API
+                ordersList = RetrofitClient.apiService.adminGetAllOrders(eateryId)
             } catch (e: Exception) { e.printStackTrace() }
         }
     }

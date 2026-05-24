@@ -144,5 +144,8 @@ interface ApiService {
     // API Khách hàng cập nhật trạng thái đơn hàng (Đã nhận hàng)
     @POST("update_order_status.php")
     suspend fun updateOrderStatus(@Body request: Map<String, String>): ApiResponse
+    // Đã thêm @Query("eatery_id")
+    @GET("admin_manage_orders.php?action=get_all")
+    suspend fun adminGetAllOrders(@Query("eatery_id") eateryId: Int): List<Map<String, String>>
 
 }

@@ -18,11 +18,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -38,17 +40,13 @@ import com.example.foodapp.network.RetrofitClient
 fun EateryDetailScreen(navController: NavController, eateryId: String = "1") {
     val primaryOrange = Color(0xFFFF6D3F)
     val coroutineScope = rememberCoroutineScope()
-    val context = LocalContext.current // Lấy context để hiển thị Toast thông báo
+    val context = LocalContext.current
 
-    // Khai báo các biến lưu trữ dữ liệu
     var eatery by remember { mutableStateOf<Eatery?>(null) }
     var productList by remember { mutableStateOf<List<Product>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
-
-    // Biến quản lý trạng thái Lưu nhà hàng (Mặc định là false)
     var isSaved by remember { mutableStateOf(false) }
 
-    // Gọi API lấy dữ liệu dựa theo eateryId
     LaunchedEffect(eateryId) {
         coroutineScope.launch {
             try {
@@ -56,9 +54,6 @@ fun EateryDetailScreen(navController: NavController, eateryId: String = "1") {
                 if (response.success) {
                     eatery = response.eatery
                     productList = response.products ?: emptyList()
-
-                    // (Tùy chọn) Nếu API của bạn có trả về trạng thái is_saved từ MySQL
-                    // isSaved = response.is_saved ?: false
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -68,13 +63,18 @@ fun EateryDetailScreen(navController: NavController, eateryId: String = "1") {
         }
     }
 
-    // Hiển thị vòng xoay đang tải
     if (isLoading) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator(color = primaryOrange)
         }
         return
     }
+
+    // ==========================================
+    // 1. KIỂM TRA TRẠNG THÁI MỞ CỬA CỦA QUÁN
+    // ==========================================
+    val isOpenStr = eatery?.is_open?.toString() ?: "1"
+    val isRestaurantOpen = isOpenStr == "1" || isOpenStr == "1.0" || isOpenStr == "true"
 
     Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF12151C)) {
         Column(
@@ -107,7 +107,6 @@ fun EateryDetailScreen(navController: NavController, eateryId: String = "1") {
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Tên quán chiếm không gian còn lại
                     Text(
                         text = eatery?.name ?: "Đang tải...",
                         fontSize = 22.sp,
@@ -115,7 +114,6 @@ fun EateryDetailScreen(navController: NavController, eateryId: String = "1") {
                         modifier = Modifier.weight(1f)
                     )
 
-                    // ---- NÚT LƯU YÊU THÍCH (TRÁI TIM) ----
                     IconButton(onClick = {
                         coroutineScope.launch {
                             try {
@@ -123,7 +121,6 @@ fun EateryDetailScreen(navController: NavController, eateryId: String = "1") {
                                     "user_id" to UserSession.userId.toString(),
                                     "restaurant_id" to eateryId
                                 )
-                                // Gọi API Toggle
                                 val response = RetrofitClient.apiService.toggleSavedEatery(request)
 
                                 if (response.success) {
@@ -142,7 +139,6 @@ fun EateryDetailScreen(navController: NavController, eateryId: String = "1") {
                         )
                     }
 
-                    // ---- NÚT THÔNG TIN ----
                     IconButton(onClick = { navController.navigate("eatery_info") }) {
                         Icon(
                             Icons.Default.Info,
@@ -160,19 +156,49 @@ fun EateryDetailScreen(navController: NavController, eateryId: String = "1") {
                     Text(text = eatery?.distance ?: "", fontSize = 14.sp, color = Color.Gray)
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // ==========================================
+                // 2. HIỂN THỊ CẢNH BÁO NẾU QUÁN ĐÓNG CỬA
+                // ==========================================
+                if (!isRestaurantOpen) {
+                    Text(
+                        text = "Quán hiện đang tạm đóng cửa. Không thể đặt món lúc này!",
+                        color = Color.White,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color.Red)
+                            .padding(12.dp),
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
                 Text(text = "Thực đơn", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // ---- HIỂN THỊ DANH SÁCH MÓN ĂN TỪ MYSQL ----
+                // ---- HIỂN THỊ DANH SÁCH MÓN ĂN ----
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
                     items(productList.size) { index ->
                         val product = productList[index]
+
+                        // ==========================================
+                        // 3. KIỂM TRA TRẠNG THÁI VÀ KHÓA MÓN ĂN
+                        // ==========================================
+                        val isAvailableStr = product.is_available?.toString() ?: "1"
+                        val isProductAvailable = isAvailableStr == "1" || isAvailableStr == "1.0" || isAvailableStr == "true"
+
+                        // Điều kiện để được phép bấm: Quán phải Mở cửa VÀ Món phải Còn hàng
+                        val canOrder = isRestaurantOpen && isProductAvailable
+
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 12.dp)
-                                .clickable {
+                                .alpha(if (canOrder) 1f else 0.4f) // LÀM MỜ MÓN ĂN NẾU KHÔNG THỂ ĐẶT
+                                .clickable(enabled = canOrder) { // KHÓA CẢ NÚT BẤM
                                     navController.navigate("product_detail/${product.id}")
                                 },
                             verticalAlignment = Alignment.CenterVertically
@@ -191,7 +217,13 @@ fun EateryDetailScreen(navController: NavController, eateryId: String = "1") {
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(text = product.description ?: "", color = Color.Gray, fontSize = 12.sp)
                                 Spacer(modifier = Modifier.height(8.dp))
-                                Text(text = "${product.price} VNĐ", color = primaryOrange, fontWeight = FontWeight.Bold)
+
+                                // HIỂN THỊ GIÁ HOẶC CHỮ HẾT HÀNG
+                                if (isProductAvailable) {
+                                    Text(text = "${product.price} VNĐ", color = primaryOrange, fontWeight = FontWeight.Bold)
+                                } else {
+                                    Text(text = "Hết hàng", color = Color.Red, fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                         HorizontalDivider(color = Color.LightGray.copy(alpha = 0.3f))
